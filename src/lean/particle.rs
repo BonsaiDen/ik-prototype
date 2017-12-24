@@ -16,6 +16,7 @@ use super::Vec2;
 pub struct Particle {
     pub position: Vec2,
     pub prev_position: Vec2,
+    m_position: Vec2,
     acceleration: Vec2,
     inv_mass: f32
 }
@@ -26,6 +27,7 @@ impl Particle {
         Self {
             position: position,
             prev_position: position,
+            m_position: position,
             acceleration: Vec2::zero(),
             inv_mass: 1.0
         }
@@ -47,6 +49,7 @@ impl Particle {
 }
 
 pub struct ParticleConstraint {
+    // TODO support different type of constraints
     a: usize,
     b: usize,
     rest_length: f32
@@ -67,7 +70,8 @@ impl ParticleConstraint {
 pub struct ParticleSystem {
     particles: Vec<Particle>,
     constraints: Vec<ParticleConstraint>,
-    iterations: usize
+    iterations: usize,
+    activity: usize
 }
 
 impl ParticleSystem {
@@ -82,7 +86,8 @@ impl ParticleSystem {
         Self {
             particles: particles,
             constraints: Vec::new(),
-            iterations
+            iterations,
+            activity: 10
         }
 
     }
@@ -91,6 +96,14 @@ impl ParticleSystem {
         for (index, p) in self.particles.iter_mut().enumerate() {
             callback(index, p);
         }
+    }
+
+    pub fn active(&self) -> bool {
+        self.activity > 0
+    }
+
+    pub fn activate(&mut self) {
+        self.activity = 10;
     }
 
     pub fn get(&self, index: usize) -> &Particle {
@@ -103,24 +116,29 @@ impl ParticleSystem {
 
     pub fn add_constraint(&mut self, constraint: ParticleConstraint) {
         self.constraints.push(constraint);
+        self.activate();
     }
 
-    pub fn visit<C: FnMut(&Particle, usize)>(&self, mut callback: C) {
+    pub fn visit<C: FnMut(usize, &Particle, bool)>(&self, mut callback: C) {
+        let is_awake = self.active();
         for (index, p) in self.particles.iter().enumerate() {
-            callback(p, index);
+            callback(index, p, is_awake);
         }
     }
 
-    pub fn visit_chain<C: FnMut(&Particle, &Particle, usize)>(&mut self, mut callback: C) {
+    pub fn visit_chain<C: FnMut(usize, &Particle, &Particle, bool)>(&mut self, mut callback: C) {
+        let is_awake = self.active();
         for i in 1..self.particles.len() {
-            callback(&self.particles[i - 1], &self.particles[i], i - 1);
+            callback(i - 1, &self.particles[i - 1], &self.particles[i], is_awake);
         }
     }
 
     pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collision: C) {
-        self.accumulate_forces(gravity);
-        self.verlet(time_step);
-        self.satisfy_constraints(collision);
+        if self.active() {
+            self.accumulate_forces(gravity);
+            self.verlet(time_step);
+            self.satisfy_constraints(collision);
+        }
     }
 
     fn verlet(&mut self, time_step: f32) {
@@ -143,10 +161,19 @@ impl ParticleSystem {
 
     fn satisfy_constraints<C: Fn(&mut Particle)>(&mut self, collision: C) {
 
+        let mut any_particle_active = false;
         for _ in 0..self.iterations {
 
             for mut p in &mut self.particles {
+
                 collision(&mut p);
+
+                // Check if the particle moved within the previous iteration
+                if (p.position - p.m_position).len().abs() > 0.1 {
+                    any_particle_active = true;
+                    p.m_position = p.position;
+                }
+
             }
 
             for c in &self.constraints {
@@ -158,7 +185,7 @@ impl ParticleSystem {
 
                     let p1 = self.particles[c.a].position;
                     let p2 = self.particles[c.b].position;
-                    let mut delta = p2 - p1;
+                    let delta = p2 - p1;
 
                     // Fast inverse square root
                     let dot = delta * delta;
@@ -174,6 +201,10 @@ impl ParticleSystem {
 
             }
 
+        }
+
+        if !any_particle_active {
+            self.activity = self.activity.saturating_sub(1);
         }
 
     }

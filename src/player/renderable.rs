@@ -274,21 +274,18 @@ impl PlayerRenderable {
         };
 
         // Update headband
-        let head = self.skeleton.get_bone("Head").unwrap().end().scale(facing);
-        let head = self.skeleton.to_world(head) * self.config.scale;
-        self.headband.get_mut(0).set_position(head);
-        self.headband.step(dt, Vec2::new(-170.0 * facing.x, 30.0), |p| {
-
-        });
+        let neck = self.skeleton.get_bone("Neck").unwrap().end().scale(facing);
+        let neck = self.skeleton.to_world(neck) * self.config.scale;
+        self.headband.get_mut(0).set_position(neck);
 
     }
 
     pub fn draw(&mut self, context: &mut Context, level: &Level) {
 
+        // Update ragdoll
         let ragdoll_timer = self.ragdoll_timer;
         if let Some(ref mut ragdoll) = self.ragdoll {
-            // TODO level ground collision...
-            // TODO disable ragdoll once we hit the ground
+
             ragdoll.step(context.dt(), Vec2::new(0.0, 120.0), |mut p| {
                 if p.position.y > level.floor {
                     if ragdoll_timer > 1.0 {
@@ -297,9 +294,10 @@ impl PlayerRenderable {
                     p.position.y = p.position.y.min(level.floor);
                 }
             });
+
         }
 
-        // Rag-dolled or not
+        // Ragdoll or skeleton driven drawing
         let facing = if let Some(ref ragdoll) = self.ragdoll {
 
             let inv_scale = 1.0 / self.config.scale;
@@ -324,9 +322,6 @@ impl PlayerRenderable {
                 self.skeleton.get_bone_index_mut(index).set_from_ragdoll(p, b);
             }
 
-            // TODO take care of root bone position
-            //let p = ragdoll.get(0);
-            // self.skeleton.get_bone_index_mut(0).set_from_ragdoll(p, p);
             self.ragdoll_facing
 
         } else {
@@ -336,14 +331,13 @@ impl PlayerRenderable {
         };
 
         // Headband
-        self.headband.visit_chain(|p, n, i| {
-            if i == 0 {
-                let d = (n.position - p.position) * 0.5;
-                context.line_vec(p.position + d, n.position, 0x00ffff00);
+        self.headband.activate(); // Don't let the headband fall into sleep
+        self.headband.step(context.dt(), Vec2::new(-200.0 * facing.x, 30.0), |p| {
+            p.position.y = p.position.y.min(level.floor);
+        });
 
-            } else {
-                context.line_vec(p.position, n.position, 0x00ffff00);
-            }
+        self.headband.visit_chain(|_, p, n, _| {
+            context.line_vec(p.position, n.position, 0x00ffff00);
         });
 
         // Draw bones
@@ -355,17 +349,17 @@ impl PlayerRenderable {
             );
 
             // Draw Head
-            if bone.name() == "Head" {
+            let name = bone.name();
+            if name == "Head" {
                 context.circle_vec(line.1 * self.config.scale, 4.0 * self.config.scale, 0x00d0d0d0);
 
-            } else if bone.name() == "L.Arm" || bone.name() == "L.Hand" {
+            } else if name == "L.Arm" || name == "L.Hand" {
                 context.line_vec(line.0 * self.config.scale, line.1 * self.config.scale, 0x00808080);
 
-            } else if bone.name() == "L.Leg" || bone.name() == "L.Foot" {
+            } else if name == "L.Leg" || name == "L.Foot" {
                 context.line_vec(line.0 * self.config.scale, line.1 * self.config.scale, 0x00808080);
 
-            } else {
-                //context.line_vec(line.0, line.1, COLORS[bone.index()]);
+            } else if name != "Root" {
                 context.line_vec(line.0 * self.config.scale, line.1 * self.config.scale, 0x00d0d0d0);
             }
 

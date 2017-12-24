@@ -145,7 +145,7 @@ impl Demo {
 
     pub fn draw(&mut self, context: &mut Context) {
         self.renderable.set_state(self.player.get_state());
-        self.renderable.update(0.016);
+        self.renderable.update(0.0166666);
         self.renderable.draw(context, &self.level);
         self.level.draw(context);
     }

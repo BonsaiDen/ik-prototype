@@ -13,7 +13,7 @@ use std::ops::{Add, Sub, Mul};
 
 
 // 2D Vector Abstraction ------------------------------------------------------
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Vec2 {
     pub x: f32,
     pub y: f32
@@ -56,6 +56,10 @@ impl Vec2 {
 
     pub fn mag(&self) -> f32 {
         (self.x * self.x + self.y * self.y).sqrt()
+    }
+
+    pub fn len(&self) -> f32 {
+        self.x + self.y
     }
 
 }
