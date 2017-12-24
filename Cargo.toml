@@ -1,0 +1,11 @@
+[package]
+name = "ik"
+version = "0.1.0"
+authors = ["Ivo Wetzel <ivo.wetzel@googlemail.com>"]
+
+[dependencies]
+minifb = "*"
+line_drawing = "*"
+lazy_static = "*"
+audio = { path = "audio", version = "0.1.0" }
+
