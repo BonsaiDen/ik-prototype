@@ -1,10 +1,10 @@
 # Procedural Animation Prototype with IK and Ragdolls
 
+![img](https://github.com/BonsaiDen/ik-prototype/blob/master/ragdoll.gif?raw=true)
+
 ## Controls
 
 `WASD` / `Spacebar` for movement, `Right-Click` for Ragdoll, `Enter` for reset.
-
-
 
 
 ## License
