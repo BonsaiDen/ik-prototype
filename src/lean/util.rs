@@ -58,8 +58,24 @@ impl Vec2 {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 
+    pub fn flipped(&self) -> Vec2 {
+        Vec2 {
+            x: self.y,
+            y: self.x
+        }
+    }
+
     pub fn len(&self) -> f32 {
         self.x + self.y
+    }
+
+    pub fn rotate(&self, a: f32) -> Vec2 {
+        let c = a.cos();
+        let s = a.sin();
+        Vec2 {
+            x: self.x * c - self.y * s,
+            y: self.x * s + self.y * c
+        }
     }
 
 }

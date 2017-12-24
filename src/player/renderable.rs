@@ -16,7 +16,7 @@ use lean::{
     Skeleton, SkeletalData,
     AnimationData,
     Angle, Vec2,
-    ParticleConstraint, ParticleSystem, ParticleTemplate,
+    ParticleConstraint, ParticleSystem, ParticleTemplate, RigidBodyData, RigidBody
 };
 
 use super::Context;
@@ -142,6 +142,23 @@ lazy_static! {
         ]
     };
 
+    static ref WEAPON_RIGID: RigidBodyData = RigidBodyData {
+        points: vec![
+            ("Center", 15.0, 0.0),
+            ("Barrel", 30.0, 0.0),
+            ("StockHigh", 0.0, 0.0),
+            ("StockLow", 0.0, 5.0)
+        ],
+        constraints: vec![
+            ("Center", "Barrel", true),
+            ("Center", "StockHigh", true),
+            ("Center", "StockLow", true),
+            ("StockHigh", "StockLow", true),
+            ("StockLow", "Barrel", false)
+        ]
+
+    };
+
 }
 
 pub struct PlayerRenderable {
@@ -165,7 +182,8 @@ pub struct PlayerRenderable {
     ragdoll_timer: f32,
     ragdoll_facing: Vec2,
     ragdoll: Option<ParticleSystem>,
-    headband: ParticleSystem
+    headband: ParticleSystem,
+    weapon: RigidBody
 
 }
 
@@ -190,70 +208,8 @@ impl PlayerRenderable {
             ragdoll_timer: 0.0,
             ragdoll_facing: Vec2::zero(),
             ragdoll: None,
-            headband: ParticleTemplate::schal(1, 4, 3.5)
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.ragdoll.take();
-    }
-
-    pub fn kill(&mut self) {
-        if self.ragdoll.is_none() {
-
-            let facing = Angle::facing(self.state.direction + D90).to_vec();
-            let mut particles = ParticleSystem::new(self.skeleton.len(), 2);
-
-            self.skeleton.visit_with_parents(|bone, parent| {
-                {
-                    let mut p = particles.get_mut(bone.index());
-                    p.set_invmass(1.0);
-                    p.set_position(self.skeleton.to_world(bone.end().scale(facing)) * self.config.scale);
-                }
-
-                if let Some(parent) = parent {
-                    particles.add_constraint(
-                        ParticleConstraint::new(bone.index(), parent.index(), bone.length() * 0.49)
-                    );
-                }
-
-            }, false);
-
-            let constraint_pairs = vec![
-                // Back legs
-                (1, 9, 1.0),
-                (1, 11, 1.0),
-
-                // Head legs
-                (3, 9, 1.00),
-                (3, 11, 1.00),
-
-                // Hip arms
-                (8, 4, 1.00),
-                (8, 6, 1.00)
-
-            ];
-
-            for (a, b, s) in constraint_pairs {
-                let ap = self.skeleton.get_bone_index(a).end();
-                let bp = self.skeleton.get_bone_index(b).end();
-                let d = (ap - bp).mag() * 0.49 * s;
-                particles.add_constraint(
-                    ParticleConstraint::new(a, b, d)
-                );
-            }
-
-            particles.get_mut(0).apply_force(Vec2::new(-5.0, -10.5).scale(facing));
-            particles.get_mut(3).apply_force(Vec2::new(-8.0, -20.5).scale(facing));
-
-            particles.get_mut(0).set_invmass(0.97);
-            particles.get_mut(1).set_invmass(0.98);
-            particles.get_mut(3).set_invmass(0.99);
-
-            self.ragdoll_timer = 0.0;
-            self.ragdoll_facing = facing;
-            self.ragdoll = Some(particles);
-
+            headband: ParticleTemplate::schal(1, 4, 3.5),
+            weapon: RigidBody::new(&WEAPON_RIGID)
         }
     }
 
@@ -285,7 +241,6 @@ impl PlayerRenderable {
         // Update ragdoll
         let ragdoll_timer = self.ragdoll_timer;
         if let Some(ref mut ragdoll) = self.ragdoll {
-
             ragdoll.step(context.dt(), Vec2::new(0.0, 120.0), |mut p| {
                 if p.position.y > level.floor {
                     if ragdoll_timer > 1.0 {
@@ -294,7 +249,6 @@ impl PlayerRenderable {
                     p.position.y = p.position.y.min(level.floor);
                 }
             });
-
         }
 
         // Ragdoll or skeleton driven drawing
@@ -336,7 +290,7 @@ impl PlayerRenderable {
             p.position.y = p.position.y.min(level.floor);
         });
 
-        self.headband.visit_chain(|_, p, n, _| {
+        self.headband.visit_particles_chained(|_, p, n, _| {
             context.line_vec(p.position, n.position, 0x00ffff00);
         });
 
@@ -366,29 +320,116 @@ impl PlayerRenderable {
         }, false);
 
         // Draw Weapon
-        // TODO let weapon drop once rag-dolled
-        // TODO use a rigid body as the weapon all the time
         if self.ragdoll.is_none() {
 
             let shoulder = self.skeleton.get_bone("Back").unwrap().end();
-            let (_, grip_angle, trigger) = self.get_weapon_grip(shoulder, facing);
-
             let facing_shoulder = shoulder.scale(facing);
-            let stock = self.skeleton.to_world(facing_shoulder + Angle::offset(self.state.direction, 0.5 - self.recoil));
-            let barrel = self.skeleton.to_world(facing_shoulder + Angle::offset(self.state.direction, 30.0 - self.recoil));
-            let barrel_mid = self.skeleton.to_world(facing_shoulder + Angle::offset(self.state.direction, 15.0 - self.recoil));
-            let trigger_base = self.skeleton.to_world((trigger + Angle::offset(grip_angle - D90, 4.0)).scale(facing));
-            let trigger = self.skeleton.to_world(trigger.scale(facing));
-            let color = 0x00ffff00;
 
-            context.line_vec(stock * self.config.scale, barrel * self.config.scale, color);
-            context.line_vec(trigger * self.config.scale, trigger_base * self.config.scale, color);
-            context.line_vec(stock * self.config.scale, trigger * self.config.scale, color);
-            context.line_vec(barrel_mid * self.config.scale, trigger * self.config.scale, color);
+            self.weapon.update(
+                self.skeleton.to_world(facing_shoulder),
+                Vec2::new(-self.recoil, 0.0),
+                facing.flipped(),
+                self.state.direction
+            );
+
+            self.weapon.visit_static(|a, b| {
+                context.line_vec(
+                    a * self.config.scale,
+                    b * self.config.scale,
+                    0x00ff0000
+                );
+            });
+
+        } else {
+            self.weapon.step(context.dt(), Vec2::new(0.0, 120.0), |p| {
+                p.position.y = p.position.y.min(level.floor);
+            });
+            self.weapon.visit_dynamic(|(_, a), (_, b), _| {
+                context.line_vec(
+                    a,
+                    b,
+                    0x00ff0000
+                );
+            });
         }
 
     }
 
+    pub fn reset(&mut self) {
+        self.ragdoll.take();
+    }
+
+    pub fn kill(&mut self) {
+        if self.ragdoll.is_none() {
+
+            let facing = Angle::facing(self.state.direction + D90).to_vec();
+            let force = Vec2::new(-8.0, -15.5).scale(facing);
+
+            // Update weapon model to support ragdoll
+            self.weapon.update_ragdoll();
+            //self.weapon.apply_force(force * 0.5);
+
+            // Create Skeleton Ragdoll
+            let mut particles = ParticleSystem::new(self.skeleton.len(), 2);
+
+            self.skeleton.visit_with_parents(|bone, parent| {
+                {
+                    let p = particles.get_mut(bone.index());
+                    p.set_invmass(1.0);
+                    p.set_position(self.skeleton.to_world(bone.end().scale(facing)) * self.config.scale);
+                }
+
+                if let Some(parent) = parent {
+                    particles.add_constraint(
+                        ParticleConstraint::new(bone.index(), parent.index(), bone.length() * 0.49)
+                    );
+                }
+
+            }, false);
+
+            // Setup additional constraints for nicer looks
+            let constraint_pairs = vec![
+                // Back legs
+                (1, 9, 1.0),
+                (1, 11, 1.0),
+
+                // Head legs
+                (3, 9, 1.00),
+                (3, 11, 1.00),
+
+                // Hip arms
+                (8, 4, 1.00),
+                (8, 6, 1.00)
+
+            ];
+
+            for (a, b, s) in constraint_pairs {
+                let ap = self.skeleton.get_bone_index(a).end();
+                let bp = self.skeleton.get_bone_index(b).end();
+                let d = (ap - bp).mag() * 0.49 * s;
+                particles.add_constraint(
+                    ParticleConstraint::new(a, b, d)
+                );
+            }
+
+            // Tweak inverse masses of root, back and head
+            particles.get_mut(0).set_invmass(0.97);
+            particles.get_mut(1).set_invmass(0.98);
+            particles.get_mut(3).set_invmass(0.99);
+
+            // Apply initial force
+            particles.get_mut(0).apply_force(force);
+            particles.get_mut(3).apply_force(force * 0.8);
+
+            self.ragdoll_timer = 0.0;
+            self.ragdoll_facing = facing;
+            self.ragdoll = Some(particles);
+
+        }
+    }
+
+
+    // Internal ---------------------------------------------------------------
     fn update_active(&mut self, dt: f32) {
 
         if !self.was_grounded && self.state.is_grounded {
@@ -453,9 +494,6 @@ impl PlayerRenderable {
             self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * self.state.velocity.x.abs().max(1.0).min(1.125)), 0.05);
 
         } else if self.state.velocity.x.abs() > 0.5 {
-            //if self.is_crouching {
-            //    self.skeleton.set_animation(&RUN_ANIMATION, 0.1, 0.05);
-
             if self.state.velocity.x.signum() == facing.x {
                 self.skeleton.set_animation(&RUN_ANIMATION, 0.05 * s, 0.05);
 

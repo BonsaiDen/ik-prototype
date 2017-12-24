@@ -15,7 +15,7 @@ mod animation;
 pub use self::animation::{Animation, AnimationData};
 
 mod particle;
-pub use self::particle::{Particle, ParticleConstraint, ParticleSystem, ParticleTemplate};
+pub use self::particle::{Particle, ParticleConstraint, ParticleSystem, ParticleTemplate, RigidBodyData, RigidBody};
 
 mod skeleton;
 pub use self::skeleton::{SkeletalData, Skeleton};

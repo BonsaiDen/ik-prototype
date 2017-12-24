@@ -7,11 +7,15 @@
 // except according to those terms.
 
 
+// STD Dependencies -----------------------------------------------------------
+use std::collections::HashMap;
+
+
 // Internal Dependencies ------------------------------------------------------
 use super::Vec2;
 
 
-// Simple Verlet based Particle System ----------------------------------------
+// 2D Particle Abstraction -----------------------------------------------------
 #[derive(Default, Copy, Clone)]
 pub struct Particle {
     pub position: Vec2,
@@ -52,7 +56,8 @@ pub struct ParticleConstraint {
     // TODO support different type of constraints
     a: usize,
     b: usize,
-    rest_length: f32
+    rest_length: f32,
+    visual: bool
 }
 
 impl ParticleConstraint {
@@ -61,12 +66,18 @@ impl ParticleConstraint {
         Self {
             a,
             b,
-            rest_length
+            rest_length,
+            visual: false
         }
+    }
+
+    pub fn set_visual(&mut self, visual: bool) {
+        self.visual = visual;
     }
 
 }
 
+// Simple Verlet based Particle System ----------------------------------------
 pub struct ParticleSystem {
     particles: Vec<Particle>,
     constraints: Vec<ParticleConstraint>,
@@ -119,17 +130,28 @@ impl ParticleSystem {
         self.activate();
     }
 
-    pub fn visit<C: FnMut(usize, &Particle, bool)>(&self, mut callback: C) {
+    pub fn visit_particles<C: FnMut(usize, &Particle, bool)>(&self, mut callback: C) {
         let is_awake = self.active();
         for (index, p) in self.particles.iter().enumerate() {
             callback(index, p, is_awake);
         }
     }
 
-    pub fn visit_chain<C: FnMut(usize, &Particle, &Particle, bool)>(&mut self, mut callback: C) {
+    pub fn visit_particles_chained<C: FnMut(usize, &Particle, &Particle, bool)>(&mut self, mut callback: C) {
         let is_awake = self.active();
         for i in 1..self.particles.len() {
             callback(i - 1, &self.particles[i - 1], &self.particles[i], is_awake);
+        }
+    }
+
+    pub fn visit_constraints<C: FnMut((usize, Vec2), (usize, Vec2), bool)>(&self, mut callback: C) {
+        let is_awake = self.active();
+        for constraint in self.constraints.iter() {
+            if constraint.visual {
+                let a = self.particles[constraint.a].position;
+                let b = self.particles[constraint.b].position;
+                callback((constraint.a, a), (constraint.b, b), is_awake);
+            }
         }
     }
 
@@ -210,6 +232,99 @@ impl ParticleSystem {
     }
 
 }
+
+
+// Particle based Rigid Bodies ------------------------------------------------
+pub struct RigidBodyData {
+    pub points: Vec<(&'static str, f32, f32)>,
+    pub constraints: Vec<(&'static str, &'static str, bool)>
+}
+
+pub struct RigidBody {
+    angle: f32,
+    position: Vec2,
+    offset: Vec2,
+    scale: Vec2,
+    lines: Vec<((Vec2, usize), (Vec2, usize))>,
+    particles: ParticleSystem
+}
+
+impl RigidBody {
+
+    pub fn new(data: &'static RigidBodyData) -> Self {
+
+        let mut particles = ParticleSystem::new(data.points.len(), 1);
+        let mut points = HashMap::new();
+        for (index, p) in data.points.iter().enumerate() {
+            points.insert(p.0, (Vec2::new(p.1, p.2), index));
+        }
+
+        let mut lines = Vec::new();
+        for c in &data.constraints {
+
+            let a = points[c.0];
+            let b = points[c.1];
+            let l = (a.0 - b.0).mag();
+
+            let mut constraint = ParticleConstraint::new(a.1, b.1, l);
+            if c.2 {
+                constraint.set_visual(true);
+                lines.push((a, b));
+            }
+
+            particles.add_constraint(constraint);
+
+        }
+
+        Self {
+            angle: 0.0,
+            position: Vec2::zero(),
+            offset: Vec2::zero(),
+            scale: Vec2::new(1.0, 1.0),
+            lines: lines,
+            particles: particles
+        }
+    }
+
+    pub fn update(&mut self, p: Vec2, offset: Vec2, scale: Vec2, angle: f32) {
+        self.position = p;
+        self.offset = offset;
+        self.scale = scale;
+        self.angle = angle;
+    }
+
+    pub fn visit_static<C: FnMut(Vec2, Vec2)>(&self, mut callback: C) {
+        for line in &self.lines {
+            callback(
+                ((line.0).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position,
+                ((line.1).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position
+            );
+        }
+    }
+
+    pub fn update_ragdoll(&mut self) {
+        for line in &self.lines {
+            let pa = ((line.0).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
+            let pb = ((line.1).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
+            self.particles.get_mut((line.0).1).set_position(pa);
+            self.particles.get_mut((line.1).1).set_position(pb);
+        }
+    }
+
+    pub fn apply_force(&mut self, force: Vec2) {
+        self.particles.get_mut(0).apply_force(force);
+    }
+
+    pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collision: C) {
+        self.particles.step(time_step, gravity, collision);
+    }
+
+    pub fn visit_dynamic<C: FnMut((usize, Vec2), (usize, Vec2), bool)>(&self, mut callback: C) {
+        self.particles.visit_constraints(callback);
+    }
+
+}
+
 
 // ParticleSystem Templates ----------------------------------------------------
 pub struct ParticleTemplate;
