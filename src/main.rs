@@ -47,7 +47,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-            scale: Scale::X2,
+           scale: Scale::X2,
             .. WindowOptions::default()
         }).unwrap_or_else(|e| {
             panic!("{}", e);
@@ -57,6 +57,7 @@ fn main() {
     let mut context = Context {
         width: WIDTH,
         height: HEIGHT,
+        scale: 0.5,
         buffer: vec![0; WIDTH * HEIGHT],
         dt: 0.0
     };
@@ -65,16 +66,22 @@ fn main() {
     let mut accumulated_wait = Duration::from_millis(0);
     let mut last_frame = precise_time_ms();
 
-    let mut demo = Demo::new(WIDTH as f32, HEIGHT as f32);
+    let mut demo = Demo::new(WIDTH as f32 * 2.0, HEIGHT as f32 * 2.0);
     while window.is_open() && !window.is_key_down(Key::C) {
 
         for i in context.buffer.iter_mut() {
             *i = 0;
         }
 
-        let mouse_pos = window.get_mouse_pos(MouseMode::Discard);
+        let mouse_pos = if let Some((x, y)) = window.get_mouse_pos(MouseMode::Discard) {
+            Some((x * (1.0 / context.scale), y * (1.0 / context.scale)))
+
+        } else {
+            None
+        };
+
         demo.update(
-            mouse_pos ,
+            mouse_pos,
             window.is_key_down(Key::A),
             window.is_key_down(Key::D),
             false,//window.is_key_down(Key::LeftShift),
@@ -119,6 +126,7 @@ pub struct Context {
     width: usize,
     height: usize,
     buffer: Vec<u32>,
+    scale: f32,
     dt: f32
 }
 
@@ -133,7 +141,7 @@ impl Context {
     }
 
     pub fn circle(&mut self, x: f32, y: f32, r: f32, color: u32) {
-        for (x, y) in BresenhamCircle::new(x as i32, y as i32, r as i32) {
+        for (x, y) in BresenhamCircle::new((x * self.scale) as i32, (y * self.scale) as i32, (r * self.scale) as i32) {
             if x > 0 && x < self.width as i32 && y > 0 && y < self.height as i32 {
                 self.buffer[y as usize * self.width + x as usize] = color;
             }
@@ -158,7 +166,7 @@ impl Context {
                 self.buffer[y as usize * self.width + x as usize] = c;
             }
         }*/
-        for (x, y) in Midpoint::<f32, i32>::new((sx, sy), (tx, ty)) {
+        for (x, y) in Midpoint::<f32, i32>::new((sx * self.scale, sy * self.scale), (tx * self.scale, ty * self.scale)) {
             if x > 0 && x < self.width as i32 && y > 0 && y < self.height as i32 {
                 self.buffer[y as usize * self.width + x as usize] = color;
             }

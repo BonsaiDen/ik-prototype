@@ -147,7 +147,8 @@ lazy_static! {
             ("Center", 15.0, 0.0),
             ("Barrel", 30.0, 0.0),
             ("StockHigh", 0.0, 0.0),
-            ("StockLow", 0.0, 5.0)
+            ("StockLow", 0.0, 5.0),
+            ("UpperMid", 0.0, -15.0)
         ],
         constraints: vec![
             ("Center", "Barrel", true),
@@ -208,7 +209,7 @@ impl PlayerRenderable {
             ragdoll_timer: 0.0,
             ragdoll_facing: Vec2::zero(),
             ragdoll: None,
-            headband: ParticleTemplate::schal(1, 4, 3.5),
+            headband: ParticleTemplate::schal(1, 4, 7.0),
             weapon: RigidBody::new(&WEAPON_RIGID)
         }
     }
@@ -241,7 +242,7 @@ impl PlayerRenderable {
         // Update ragdoll
         let ragdoll_timer = self.ragdoll_timer;
         if let Some(ref mut ragdoll) = self.ragdoll {
-            ragdoll.step(context.dt(), Vec2::new(0.0, 120.0), |mut p| {
+            ragdoll.step(context.dt(), Vec2::new(0.0, 240.0), |mut p| {
                 if p.position.y > level.floor {
                     if ragdoll_timer > 1.0 {
                         p.set_invmass(0.5);
@@ -286,7 +287,7 @@ impl PlayerRenderable {
 
         // Headband
         self.headband.activate(); // Don't let the headband fall into sleep
-        self.headband.step(context.dt(), Vec2::new(-200.0 * facing.x, 30.0), |p| {
+        self.headband.step(context.dt(), Vec2::new(-200.0 * facing.x, 60.0), |p| {
             p.position.y = p.position.y.min(level.floor);
         });
 
@@ -341,7 +342,7 @@ impl PlayerRenderable {
             });
 
         } else {
-            self.weapon.step(context.dt(), Vec2::new(0.0, 120.0), |p| {
+            self.weapon.step(context.dt(), Vec2::new(0.0, 240.0), |p| {
                 p.position.y = p.position.y.min(level.floor);
             });
             self.weapon.visit_dynamic(|(_, a), (_, b), _| {
@@ -363,11 +364,11 @@ impl PlayerRenderable {
         if self.ragdoll.is_none() {
 
             let facing = Angle::facing(self.state.direction + D90).to_vec();
-            let force = Vec2::new(-8.0, -15.5).scale(facing);
+            let force = Vec2::new(-16.0, -31.0).scale(facing);
 
             // Update weapon model to support ragdoll
             self.weapon.update_ragdoll();
-            //self.weapon.apply_force(force * 0.5);
+            self.weapon.apply_force(force * 0.5);
 
             // Create Skeleton Ragdoll
             let mut particles = ParticleSystem::new(self.skeleton.len(), 2);
@@ -381,7 +382,7 @@ impl PlayerRenderable {
 
                 if let Some(parent) = parent {
                     particles.add_constraint(
-                        ParticleConstraint::new(bone.index(), parent.index(), bone.length() * 0.49)
+                        ParticleConstraint::new(bone.index(), parent.index(), bone.length())
                     );
                 }
 
@@ -406,7 +407,7 @@ impl PlayerRenderable {
             for (a, b, s) in constraint_pairs {
                 let ap = self.skeleton.get_bone_index(a).end();
                 let bp = self.skeleton.get_bone_index(b).end();
-                let d = (ap - bp).mag() * 0.49 * s;
+                let d = (ap - bp).mag() * s;
                 particles.add_constraint(
                     ParticleConstraint::new(a, b, d)
                 );

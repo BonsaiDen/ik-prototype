@@ -69,10 +69,10 @@ pub struct Demo {
 
 impl Demo {
 
-    pub fn new(width: f32, _: f32) -> Self {
+    pub fn new(width: f32, height: f32) -> Self {
 
         let config = Config {
-            scale: 0.5,
+            scale: 1.0,
             acceleration: 0.70,
             acceleration_max: 3.5,
             velocity_damping: 0.7,
@@ -107,7 +107,7 @@ impl Demo {
             renderable: PlayerRenderable::from_skeleton(&SKELETON, config),
             level: Level {
                 width,
-                floor: 200.0
+                floor: height * 0.75
             },
             input_direction: 0.0
         }
@@ -151,6 +151,4 @@ impl Demo {
     }
 
 }
-
-
 
