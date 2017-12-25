@@ -15,6 +15,7 @@ use std::collections::HashMap;
 // Internal Dependencies ------------------------------------------------------
 use super::{Angle, Vec2};
 use super::animation::{AnimationFrameBone, AnimationData, AnimationBlender};
+use super::{Constraint, StickConstraint, Particle, ParticleLike, ParticleSystemLike};
 
 
 // Types ----------------------------------------------------------------------
@@ -49,11 +50,17 @@ impl SkeletalData {
                 index: index,
                 parent: parent,
                 children: Vec::new(),
+
                 tmp_update_angle: 0.0,
                 current_angle: 0.0,
                 user_angle: 0.0,
+
                 start: Vec2::zero(),
                 end: Vec2::zero(),
+
+                world_position: Vec2::zero(),
+                local_transform: Vec2::new(1.0, 1.0),
+
                 data: bone
             }
 
@@ -115,7 +122,8 @@ pub struct Skeleton {
     child_last_indices: Vec<usize>,
 
     // World position offset
-    world_offset: Vec2,
+    local_transform: Vec2,
+    world_position: Vec2,
 
     // Animation offsets, with rest angles as defaults
     bone_rest_angles: Vec<AnimationFrameBone>,
@@ -161,7 +169,8 @@ impl Skeleton {
             child_last_indices: child_last_indices,
 
             // Positions
-            world_offset: Vec2::zero(),
+            local_transform: Vec2::new(1.0, 1.0),
+            world_position: Vec2::zero(),
 
             // Animations
             bone_rest_angles: data.to_animation_bones(),
@@ -173,16 +182,24 @@ impl Skeleton {
 
 
     // Offsets & Positions ----------------------------------------------------
+    pub fn set_local_transform(&mut self, transform: Vec2) {
+        self.local_transform = transform;
+    }
+
     pub fn set_world_offset(&mut self, p: Vec2) {
-        self.world_offset = p;
+        self.world_position = p;
     }
 
     pub fn to_local(&self, w: Vec2) -> Vec2 {
-        w - self.world_offset
+        w - self.world_position
     }
 
     pub fn to_world(&self, p: Vec2) -> Vec2 {
-        p + self.world_offset
+        p + self.world_position
+    }
+
+    pub fn local_transform(&self) -> Vec2 {
+        self.local_transform
     }
 
 
@@ -234,7 +251,7 @@ impl Skeleton {
                 bone.length(),
                 bone.parent,
                 bone.index,
-                self.bones[bone.parent].start(),
+                self.bones[bone.parent].start_local(),
                 // We need to incorporate the parent bone angle
                 // As this does not correctly update with the calculate_bone()
                 // calls below
@@ -270,6 +287,23 @@ impl Skeleton {
         }
     }
 
+    pub fn get_bone_end_world(&self, name: &'static str) -> Vec2 {
+        self.to_world(self.get_bone_end_local(name))
+    }
+
+    pub fn get_bone_end_local(&self, name: &'static str) -> Vec2 {
+        self.get_bone_end_ik(name).scale(self.local_transform)
+    }
+
+    pub fn get_bone_end_ik(&self, name: &'static str) -> Vec2 {
+        if let Some(bone) = self.get_bone(name) {
+            bone.end_local()
+
+        } else {
+            self.world_position
+        }
+    }
+
     pub fn get_bone_mut(&mut self, name: &'static str) -> Option<&mut Bone> {
         if let Some(index) = self.name_to_index.get(name) {
             Some(&mut self.bones[*index])
@@ -279,56 +313,79 @@ impl Skeleton {
         }
     }
 
-    pub fn get_bone_index_mut(&mut self, index: usize) -> &mut Bone {
-        &mut self.bones[index]
-    }
-
     pub fn get_bone_index(&self, index: usize) -> &Bone {
         &self.bones[index]
     }
 
+    pub fn visit<C: FnMut(&Bone)>(&mut self, mut callback: C, children_first: bool) {
 
-    pub fn visit<C: FnMut(&Bone)>(&self, mut callback: C, children_first: bool) {
-        if children_first {
-            for i in &self.child_first_indices {
-                callback(&self.bones[*i]);
-            }
+        let sequence = if children_first {
+            &self.child_first_indices
 
         } else {
-            for i in &self.child_last_indices {
-                callback(&self.bones[*i]);
+            &self.child_last_indices
+        };
+
+        for i in sequence {
+            {
+                let b = &mut self.bones[*i];
+                b.world_position = self.world_position;
+                b.local_transform = self.local_transform;
             }
+            callback(&self.bones[*i]);
         }
+
     }
 
-    pub fn visit_with_parents<C: FnMut(&Bone, Option<&Bone>)>(&self, mut callback: C, children_first: bool) {
-        if children_first {
-            for i in &self.child_first_indices {
-                let parent = self.bones[*i].parent;
-                if parent == 255 {
-                    callback(&self.bones[*i], None);
+    pub fn visit_mut<C: FnMut(&mut Bone)>(&mut self, mut callback: C, children_first: bool) {
 
-                } else {
-                    callback(&self.bones[*i], Some(&self.bones[parent]));
-                }
-            }
+        let sequence = if children_first {
+            &self.child_first_indices
 
         } else {
-            for i in &self.child_last_indices {
-                let parent = self.bones[*i].parent;
-                if parent == 255 {
-                    callback(&self.bones[*i], None);
+            &self.child_last_indices
+        };
 
-                } else {
-                    callback(&self.bones[*i], Some(&self.bones[parent]));
+        for i in sequence {
+            {
+                let b = &mut self.bones[*i];
+                b.world_position = self.world_position;
+                b.local_transform = self.local_transform;
+            }
+            callback(&mut self.bones[*i]);
+        }
+
+    }
+
+    /*
+    pub fn visit_with_parents<C: FnMut(&Bone, &Bone)>(&mut self, mut callback: C, children_first: bool) {
+
+        let sequence = if children_first {
+            &self.child_first_indices
+
+        } else {
+            &self.child_last_indices
+        };
+
+        for i in sequence {
+            let parent = self.bones[*i].parent;
+            if parent != 255 {
+                {
+                    let b = &mut self.bones[*i];
+                    b.world_position = self.world_position;
+                    b.local_transform = self.local_transform;
                 }
+                {
+                    let b = &mut self.bones[parent];
+                    b.world_position = self.world_position;
+                    b.local_transform = self.local_transform;
+                }
+                callback(&self.bones[*i], &self.bones[parent]);
             }
         }
-    }
 
-    pub fn len(&self) -> usize {
-        self.bones.len()
     }
+    */
 
 
     // Internal ---------------------------------------------------------------
@@ -396,6 +453,24 @@ impl Skeleton {
 
 }
 
+impl ParticleSystemLike for Skeleton {
+
+    fn get_particles(&self) -> Vec<Particle> {
+        self.bones.iter().map(|bone| {
+            bone.to_particle()
+
+        }).collect()
+    }
+
+    fn get_constraints(&self) -> Vec<Box<Constraint>> {
+        self.bones.iter().filter_map(|bone| {
+            bone.to_constaint()
+
+        }).collect()
+    }
+
+}
+
 
 // Bone Abstraction -----------------------------------------------------------
 #[derive(Debug)]
@@ -403,12 +478,37 @@ pub struct Bone {
     index: usize,
     parent: usize,
     children: Vec<usize>,
+
     tmp_update_angle: f32,
     current_angle: f32,
     user_angle: f32,
+
     start: Vec2, // parent.end
     end: Vec2, // children[..].start
+
+    // Note: Only updated in skeleton visit_*() methods
+    world_position: Vec2,
+    local_transform: Vec2,
+
     data: &'static SkeletalBone
+}
+
+
+impl ParticleLike for Bone {
+
+    fn to_constaint(&self) -> Option<Box<Constraint>> {
+        if self.parent != 255 {
+            Some(Box::new(StickConstraint::new(self.index, self.parent, self.length())))
+
+        } else {
+            None
+        }
+    }
+
+    fn to_particle(&self) -> Particle {
+        Particle::with_inv_mass(self.end_world(), 1.0)
+    }
+
 }
 
 impl Bone {
@@ -421,12 +521,34 @@ impl Bone {
         self.index
     }
 
-    pub fn start(&self) -> Vec2 {
+    pub fn parent(&self) -> Option<usize> {
+        if self.parent != 255 {
+            Some(self.parent)
+
+        } else {
+            None
+        }
+    }
+
+    pub fn start_local(&self) -> Vec2 {
         self.start
     }
 
-    pub fn end(&self) -> Vec2 {
+    pub fn start_world(&self) -> Vec2 {
+        self.start.scale(self.local_transform) + self.world_position
+    }
+
+    pub fn end_local(&self) -> Vec2 {
         self.end
+    }
+
+    pub fn end_world(&self) -> Vec2 {
+        self.end.scale(self.local_transform) + self.world_position
+    }
+
+    pub fn to_local(&self, w: Vec2) -> Vec2 {
+        (w - self.world_position).scale(self.local_transform)
+        //self.skeleton.to_local(b.position).scale(self.ragdoll_facing),
     }
 
     pub fn length(&self) -> f32 {

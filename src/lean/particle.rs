@@ -19,7 +19,16 @@ pub trait Constraint {
     fn visible(&self) -> bool {
         false
     }
+}
 
+pub trait ParticleSystemLike {
+    fn get_particles(&self) -> Vec<Particle>;
+    fn get_constraints(&self) -> Vec<Box<Constraint>>;
+}
+
+pub trait ParticleLike {
+    fn to_constaint(&self) -> Option<Box<Constraint>> where Self: Sized;
+    fn to_particle(&self) -> Particle where Self: Sized;
 }
 
 // 2D Particles Constraints ---------------------------------------------------
@@ -88,6 +97,7 @@ impl Constraint for StickConstraint {
 
 }
 
+/*
 pub struct AngularConstraint {
     a: usize,
     b: usize,
@@ -152,7 +162,7 @@ impl Constraint for AngularConstraint {
     }
 
 }
-
+*/
 
 // 2D Particle Abstraction ----------------------------------------------------
 #[derive(Default, Copy, Clone)]
@@ -167,7 +177,8 @@ pub struct Particle {
 
 impl Particle {
 
-    fn new(position: Vec2) -> Self {
+
+    pub fn new(position: Vec2) -> Self {
         Self {
             position: position,
             prev_position: position,
@@ -175,6 +186,17 @@ impl Particle {
             constant_force: Vec2::zero(),
             acceleration: Vec2::zero(),
             inv_mass: 1.0
+        }
+    }
+
+    pub fn with_inv_mass(position: Vec2, inv_mass: f32) -> Self {
+        Self {
+            position: position,
+            prev_position: position,
+            rest_position: position,
+            constant_force: Vec2::zero(),
+            acceleration: Vec2::zero(),
+            inv_mass: inv_mass
         }
     }
 
@@ -191,9 +213,10 @@ impl Particle {
         self.position = self.position + force;
     }
 
+    /*
     pub fn apply_constant_force(&mut self, force: Vec2) {
         self.constant_force = force;
-    }
+    }*/
 
 }
 
@@ -223,6 +246,15 @@ impl ParticleSystem {
             activity: 10
         }
 
+    }
+
+    pub fn from<T: ParticleSystemLike>(system_like: &T, iterations: usize) -> ParticleSystem {
+        Self {
+            particles: system_like.get_particles(),
+            constraints: system_like.get_constraints(),
+            iterations,
+            activity: 10
+        }
     }
 
     // Getters ----------------------------------------------------------------
@@ -257,11 +289,12 @@ impl ParticleSystem {
     }
 
     // Visitors ---------------------------------------------------------------
+    /*
     pub fn visit_particles<C: FnMut(usize, &Particle)>(&self, mut callback: C) {
         for (index, p) in self.particles.iter().enumerate() {
             callback(index, p);
         }
-    }
+    }*/
 
     pub fn visit_particles_mut<C: FnMut(usize, &mut Particle)>(&mut self, mut callback: C) {
         for (index, p) in self.particles.iter_mut().enumerate() {
