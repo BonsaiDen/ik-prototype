@@ -11,7 +11,150 @@
 use super::Vec2;
 
 
-// 2D Particle Abstraction -----------------------------------------------------
+// Traits ---------------------------------------------------------------------
+pub trait Constraint {
+    fn first_particle(&self) -> usize;
+    fn second_particle(&self) -> usize;
+    fn solve(&self, &mut [Particle]) {}
+    fn visible(&self) -> bool {
+        false
+    }
+
+}
+
+// 2D Particles Constraints ---------------------------------------------------
+pub struct StickConstraint {
+    a: usize,
+    b: usize,
+    rest_length: f32,
+    visible: bool
+}
+
+impl StickConstraint {
+
+    pub fn new(a: usize, b: usize, rest_length: f32) -> Self {
+        Self {
+            a,
+            b,
+            rest_length,
+            visible: false
+        }
+    }
+
+    pub fn set_visible(&mut self, visual: bool) {
+        self.visible = visual;
+    }
+
+}
+
+impl Constraint for StickConstraint {
+
+    fn visible(&self) -> bool {
+        self.visible
+    }
+
+    fn first_particle(&self) -> usize {
+        self.a
+    }
+
+    fn second_particle(&self) -> usize {
+        self.b
+    }
+
+    fn solve(&self, particles: &mut [Particle]) {
+
+        let i1 = particles[self.a].inv_mass;
+        let i2 = particles[self.b].inv_mass;
+
+        if i1 + i2 > 0.0 {
+
+            let p1 = particles[self.a].position;
+            let p2 = particles[self.b].position;
+            let delta = p2 - p1;
+
+            // Fast inverse square root
+            let dot = delta * delta;
+            let x2 = dot * 0.5;
+            let x = 0x5f375a86 - (dot.to_bits() >> 1);
+            let y = f32::from_bits(x);
+            let delta_length = 1.0 / (y * (1.5 - (x2 * y * y)));
+            let diff = (delta_length - self.rest_length) / (delta_length * (i1 + i2));
+            particles[self.a].position = p1 + delta * i1 * diff;
+            particles[self.b].position = p2 - delta * i2 * diff;
+
+        }
+
+    }
+
+}
+
+pub struct AngularConstraint {
+    a: usize,
+    b: usize,
+    angle: f32
+}
+
+impl AngularConstraint {
+
+    pub fn new(a: usize, b: usize, angle: f32) -> Self {
+        Self {
+            a,
+            b,
+            angle
+        }
+    }
+
+}
+
+impl Constraint for AngularConstraint {
+
+    fn visible(&self) -> bool {
+        false
+    }
+
+    fn first_particle(&self) -> usize {
+        self.a
+    }
+
+    fn second_particle(&self) -> usize {
+        self.b
+    }
+
+    fn solve(&self, particles: &mut [Particle]) {
+
+        let top = particles[self.a].position;
+        let bot = particles[self.b].position;
+        let da = top.angle_between(bot); // TODO does this return -PI to PI ?
+        if da > self.angle {
+
+            // TODO need length on particle
+            // TODO we need to unify the bones with the particles!
+            // let l = particles[self.b].len();
+
+            /*
+            float l = bot.Length();   // store length of wrist
+            bot = top.UnitVector();   // copy orientation
+            bot.Mult(-l);             // scale to original length
+
+                // difference of where it is, and where it should be:
+            Vector diff = t3.pos - (t2.pos+bot);
+
+                // scale it to half length:
+            diff.Mult(0.5);
+
+            // give knee and foot one push each in opposite dirs:
+            t3.pos = t3.pos - diff;
+            t2.pos = t2.pos + diff;
+            */
+
+        }
+
+    }
+
+}
+
+
+// 2D Particle Abstraction ----------------------------------------------------
 #[derive(Default, Copy, Clone)]
 pub struct Particle {
     pub position: Vec2,
@@ -54,35 +197,12 @@ impl Particle {
 
 }
 
-pub struct ParticleConstraint {
-    // TODO support different type of constraints
-    a: usize,
-    b: usize,
-    rest_length: f32,
-    visual: bool
-}
 
-impl ParticleConstraint {
-
-    pub fn new(a: usize, b: usize, rest_length: f32) -> Self {
-        Self {
-            a,
-            b,
-            rest_length,
-            visual: false
-        }
-    }
-
-    pub fn set_visual(&mut self, visual: bool) {
-        self.visual = visual;
-    }
-
-}
 
 // Simple Verlet based Particle System ----------------------------------------
 pub struct ParticleSystem {
     particles: Vec<Particle>,
-    constraints: Vec<ParticleConstraint>,
+    constraints: Vec<Box<Constraint>>,
     iterations: usize,
     activity: usize
 }
@@ -123,8 +243,8 @@ impl ParticleSystem {
         self.activity = 10;
     }
 
-    pub fn add_constraint(&mut self, constraint: ParticleConstraint) {
-        self.constraints.push(constraint);
+    pub fn add_constraint<T: Constraint + 'static>(&mut self, constraint: T) {
+        self.constraints.push(Box::new(constraint));
         self.activate();
     }
 
@@ -137,35 +257,33 @@ impl ParticleSystem {
     }
 
     // Visitors ---------------------------------------------------------------
-    pub fn visit_particles<C: FnMut(usize, &Particle, bool)>(&self, mut callback: C) {
-        let is_awake = self.active();
+    pub fn visit_particles<C: FnMut(usize, &Particle)>(&self, mut callback: C) {
         for (index, p) in self.particles.iter().enumerate() {
-            callback(index, p, is_awake);
+            callback(index, p);
         }
     }
 
-    pub fn visit_particles_mut<C: FnMut(usize, &mut Particle, bool)>(&mut self, mut callback: C) {
-        let is_awake = self.active();
+    pub fn visit_particles_mut<C: FnMut(usize, &mut Particle)>(&mut self, mut callback: C) {
         for (index, p) in self.particles.iter_mut().enumerate() {
-            callback(index, p, is_awake);
+            callback(index, p);
         }
     }
 
-    pub fn visit_particles_chained<C: FnMut(usize, &Particle, &Particle, bool)>(&mut self, mut callback: C) {
-        let is_awake = self.active();
+    pub fn visit_particles_chained<C: FnMut(usize, &Particle, &Particle)>(&mut self, mut callback: C) {
         for i in 1..self.particles.len() {
-            callback(i - 1, &self.particles[i - 1], &self.particles[i], is_awake);
+            callback(i - 1, &self.particles[i - 1], &self.particles[i]);
         }
     }
 
     pub fn visit_constraints<C: FnMut((usize, Vec2), (usize, Vec2), bool)>(&self, mut callback: C) {
-        let is_awake = self.active();
         for constraint in self.constraints.iter() {
-            if constraint.visual {
-                let a = self.particles[constraint.a].position;
-                let b = self.particles[constraint.b].position;
-                callback((constraint.a, a), (constraint.b, b), is_awake);
-            }
+            let a = self.particles[constraint.first_particle()].position;
+            let b = self.particles[constraint.second_particle()].position;
+            callback(
+                (constraint.first_particle(), a),
+                (constraint.second_particle(), b),
+                constraint.visible()
+            );
         }
     }
 
@@ -203,28 +321,7 @@ impl ParticleSystem {
             }
 
             for c in &self.constraints {
-
-                let i1 = self.particles[c.a].inv_mass;
-                let i2 = self.particles[c.b].inv_mass;
-
-                if i1 + i2 > 0.0 {
-
-                    let p1 = self.particles[c.a].position;
-                    let p2 = self.particles[c.b].position;
-                    let delta = p2 - p1;
-
-                    // Fast inverse square root
-                    let dot = delta * delta;
-                    let x2 = dot * 0.5;
-                    let x = 0x5f375a86 - (dot.to_bits() >> 1);
-                    let y = f32::from_bits(x);
-                    let delta_length = 1.0 / (y * (1.5 - (x2 * y * y)));
-                    let diff = (delta_length - c.rest_length) / (delta_length * (i1 + i2));
-                    self.particles[c.a].position = p1 + delta * i1 * diff;
-                    self.particles[c.b].position = p2 - delta * i2 * diff;
-
-                }
-
+                c.solve(&mut self.particles[..]);
             }
 
         }
@@ -247,7 +344,7 @@ impl ParticleTemplate {
         let mut particles = ParticleSystem::new(cols * rows,  2);
 
         // Intialize particles
-        particles.visit_particles_mut(|i, p, _| {
+        particles.visit_particles_mut(|i, p| {
 
             p.set_position(position);
 
@@ -269,12 +366,12 @@ impl ParticleTemplate {
 
                 if x < cols - 1 {
                     let right = y * cols + x + 1;
-                    particles.add_constraint(ParticleConstraint::new(index, right, spacing));
+                    particles.add_constraint(StickConstraint::new(index, right, spacing));
                 }
 
                 if y < rows - 1 {
                     let bottom = (y + 1) * cols + x;
-                    particles.add_constraint(ParticleConstraint::new(index, bottom, spacing));
+                    particles.add_constraint(StickConstraint::new(index, bottom, spacing));
                 }
 
             }

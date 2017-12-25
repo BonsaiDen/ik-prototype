@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 
 // Internal Dependencies ------------------------------------------------------
-use super::{Particle, ParticleConstraint, ParticleSystem, Vec2};
+use super::{StickConstraint, Particle, ParticleSystem, Vec2};
 
 
 // Particle based Rigid Bodies ------------------------------------------------
@@ -45,11 +45,11 @@ impl RigidBody {
 
             let a = points[c.0];
             let b = points[c.1];
-            let l = (a.0 - b.0).mag();
+            let l = (a.0 - b.0).len();
 
-            let mut constraint = ParticleConstraint::new(a.1, b.1, l);
+            let mut constraint = StickConstraint::new(a.1, b.1, l);
             if c.2 {
-                constraint.set_visual(true);
+                constraint.set_visible(true);
             }
             lines.push((a, b, c.2));
             particles.add_constraint(constraint);

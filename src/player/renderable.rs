@@ -16,7 +16,8 @@ use lean::{
     Skeleton, SkeletalData,
     AnimationData,
     Angle, Vec2,
-    ParticleConstraint, ParticleSystem, ParticleTemplate, RigidBodyData, RigidBody
+    StickConstraint,
+    ParticleSystem, ParticleTemplate, RigidBodyData, RigidBody
 };
 
 use super::Context;
@@ -224,7 +225,7 @@ impl PlayerRenderable {
 
         } else if self.state.hp > 0 && self.ragdoll.is_some() {
             let p = self.state.position;
-            self.scarf.visit_particles_mut(|_, particle, _| {
+            self.scarf.visit_particles_mut(|_, particle| {
                 particle.set_position(p);
             });
             self.ragdoll.take();
@@ -339,7 +340,7 @@ impl PlayerRenderable {
             p.position.y = p.position.y.min(level.floor);
         });
 
-        self.scarf.visit_particles_chained(|_, p, n, _| {
+        self.scarf.visit_particles_chained(|_, p, n| {
             context.line_vec(p.position, n.position, 0x00ffff00);
         });
 
@@ -430,7 +431,7 @@ impl PlayerRenderable {
 
                 if let Some(parent) = parent {
                     particles.add_constraint(
-                        ParticleConstraint::new(bone.index(), parent.index(), bone.length())
+                        StickConstraint::new(bone.index(), parent.index(), bone.length())
                     );
                 }
 
@@ -455,10 +456,8 @@ impl PlayerRenderable {
             for (a, b, s) in constraint_pairs {
                 let ap = self.skeleton.get_bone_index(a).end();
                 let bp = self.skeleton.get_bone_index(b).end();
-                let d = (ap - bp).mag() * s;
-                particles.add_constraint(
-                    ParticleConstraint::new(a, b, d)
-                );
+                let d = (ap - bp).len() * s;
+                particles.add_constraint(StickConstraint::new(a, b, d));
             }
 
             // Tweak inverse masses of root, back and head

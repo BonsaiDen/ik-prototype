@@ -9,7 +9,7 @@
 
 // STD Dependencies -----------------------------------------------------------
 use std::f32::consts::PI;
-use std::ops::{Add, Sub, Mul};
+use std::ops::{Add, Sub, Mul, Div};
 
 
 // 2D Vector Abstraction ------------------------------------------------------
@@ -32,12 +32,16 @@ impl Vec2 {
         Self::new(0.0, 0.0)
     }
 
-    pub fn unit() -> Self {
-        Self::new(1.0, 1.0)
+    pub fn unit(&self) -> Vec2 {
+        *self / self.len()
     }
 
     pub fn angle(&self) -> f32 {
         self.y.atan2(self.x)
+    }
+
+    pub fn angle_between(&self, other: Vec2) -> f32 {
+        (*self * other / (self.len() * other.len())).acos()
     }
 
     pub fn scale(&self, unit: Vec2) -> Vec2 {
@@ -54,7 +58,7 @@ impl Vec2 {
         }
     }
 
-    pub fn mag(&self) -> f32 {
+    pub fn len(&self) -> f32 {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 
@@ -65,7 +69,7 @@ impl Vec2 {
         }
     }
 
-    pub fn len(&self) -> f32 {
+    pub fn len_squar(&self) -> f32 {
         self.x + self.y
     }
 
@@ -124,6 +128,19 @@ impl Mul<f32> for Vec2 {
         Vec2 {
             x: self.x * scalar,
             y: self.y * scalar
+        }
+    }
+
+}
+
+impl Div<f32> for Vec2 {
+
+    type Output = Vec2;
+
+    fn div(self, scalar: f32) -> Vec2 {
+        Vec2 {
+            x: self.x / scalar,
+            y: self.y / scalar
         }
     }
 
