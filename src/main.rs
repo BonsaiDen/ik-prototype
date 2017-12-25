@@ -69,7 +69,7 @@ fn main() {
     let mut demo = Demo::new(WIDTH as f32 * 2.0, HEIGHT as f32 * 2.0);
     while window.is_open() && !window.is_key_down(Key::C) {
 
-        for i in context.buffer.iter_mut() {
+        for i in &mut context.buffer {
             *i = 0;
         }
 

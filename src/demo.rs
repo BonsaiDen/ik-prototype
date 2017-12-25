@@ -65,7 +65,7 @@ pub struct Level {
 impl Level {
 
     fn draw(&mut self, context: &mut Context) {
-        context.line(0.0, self.floor + 1.0, self.width, self.floor + 1.0, 0x00c0c0c0);
+        context.line(0.0, self.floor + 1.0, self.width, self.floor + 1.0, 0x00c0_c0c0);
     }
 
 }

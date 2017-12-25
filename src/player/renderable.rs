@@ -17,7 +17,8 @@ use lean::{
     AnimationData,
     Angle, Vec2,
     ParticleSystem, ParticleTemplate,
-    RigidBodyData, RigidBody
+    RigidBodyData, RigidBody,
+    f32_equals
 };
 
 use super::Context;
@@ -318,7 +319,7 @@ impl PlayerRenderable {
             self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * self.state.velocity.x.abs().max(1.0).min(1.125)), 0.05);
 
         } else if self.state.velocity.x.abs() > 0.5 {
-            if self.state.velocity.x.signum() == facing.x {
+            if f32_equals(self.state.velocity.x.signum(), facing.x) {
                 self.skeleton.set_animation(&RUN_ANIMATION, 0.1, 0.05);
 
             } else {
@@ -389,7 +390,7 @@ impl PlayerRenderable {
         });
 
         self.scarf.visit_particles_chained(|_, p, n| {
-            context.line_vec(p.position, n.position, 0x00ffff00);
+            context.line_vec(p.position, n.position, 0x00ff_ff00);
         });
 
         // Draw bones
@@ -402,16 +403,13 @@ impl PlayerRenderable {
 
             let name = bone.name();
             if name == "Head" {
-                context.circle_vec(line.1, 4.0, 0x00d0d0d0);
+                context.circle_vec(line.1, 4.0, 0x00d0_d0d0);
 
-            } else if name == "L.Arm" || name == "L.Hand" {
-                context.line_vec(line.0, line.1, 0x00808080);
-
-            } else if name == "L.Leg" || name == "L.Foot" {
-                context.line_vec(line.0, line.1, 0x00808080);
+            } else if name == "L.Arm" || name == "L.Hand" || name == "L.Leg" || name == "L.Foot" {
+                context.line_vec(line.0, line.1, 0x0080_8080);
 
             } else if name != "Root" {
-                context.line_vec(line.0, line.1, 0x00d0d0d0);
+                context.line_vec(line.0, line.1, 0x00d0_d0d0);
             }
 
         }, false);
@@ -430,7 +428,7 @@ impl PlayerRenderable {
                 context.line_vec(
                     a,
                     b,
-                    0x00ffff00
+                    0x00ff_ff00
                 );
             });
 
@@ -447,7 +445,7 @@ impl PlayerRenderable {
                 context.line_vec(
                     a,
                     b,
-                    0x00ffff00
+                    0x00ff_ff00
                 );
             });
 

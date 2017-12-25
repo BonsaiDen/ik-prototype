@@ -12,7 +12,7 @@ use std::f32::consts::PI;
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{Angle, Vec2};
+use lean::{Angle, Vec2, f32_equals};
 use super::Context;
 use ::demo::Level;
 
@@ -164,7 +164,7 @@ impl Player {
         self.state.velocity.y = (self.state.velocity.y + self.config.fall_speed).min(self.config.fall_limit);
 
         let facing = Angle::facing(self.state.direction + PI * 0.5).to_vec();
-        let vel_factor = if self.state.velocity.x.signum() == facing.x || !self.state.is_grounded { 1.0 } else { self.config.velocity_backwards_factor  };
+        let vel_factor = if f32_equals(self.state.velocity.x.signum(), facing.x) || !self.state.is_grounded { 1.0 } else { self.config.velocity_backwards_factor  };
         if self.state.is_crouching {
             self.state.position.x += self.state.velocity.x * self.config.crouching_factor * vel_factor;
 

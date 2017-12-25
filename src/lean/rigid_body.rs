@@ -15,6 +15,10 @@ use std::collections::HashMap;
 use super::{StickConstraint, Particle, ParticleSystem, Vec2};
 
 
+// Types ----------------------------------------------------------------------
+type RigidLine = (Vec2, usize);
+
+
 // Particle based Rigid Bodies ------------------------------------------------
 pub struct RigidBodyData {
     pub points: Vec<(&'static str, f32, f32)>,
@@ -26,7 +30,7 @@ pub struct RigidBody {
     position: Vec2,
     offset: Vec2,
     scale: Vec2,
-    lines: Vec<((Vec2, usize), (Vec2, usize), bool)>,
+    lines: Vec<(RigidLine, RigidLine, bool)>,
     particles: ParticleSystem
 }
 

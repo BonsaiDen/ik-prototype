@@ -8,8 +8,15 @@
 
 
 // STD Dependencies -----------------------------------------------------------
+use std::f32::EPSILON;
 use std::f32::consts::PI;
 use std::ops::{Add, Sub, Mul, Div};
+
+
+// Utilities ------------------------------------------------------------------
+pub fn f32_equals(a: f32, b: f32) -> bool {
+    (a - b).abs() < EPSILON
+}
 
 
 // 2D Vector Abstraction ------------------------------------------------------
@@ -173,7 +180,7 @@ pub struct Angle {
 impl Angle {
 
     pub fn transform(r: f32, v: Vec2) -> f32 {
-        if v.x == -1.0 {
+        if v.x < 0.0 {
             -r - PI
 
         } else {

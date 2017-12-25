@@ -110,7 +110,7 @@ impl Animation {
         let key_count = self.data.key_frames.len();
         let next_offset = self.data.key_frames[(self.key_index + 1) % key_count].0 * self.scale;
 
-        self.time = self.time + dt;
+        self.time += dt;
 
         // Loop
         if next_offset == 0.0 && self.time >= duration {
@@ -146,7 +146,7 @@ impl Animation {
         let (_, ref next_values) = self.data.key_frames[(self.key_index + 1) % key_count];
 
         let mut blended_values = prev_values.clone();
-        for p in blended_values.iter_mut() {
+        for p in &mut blended_values {
             for n in &next_values[..] {
                 if n.0 == p.0 {
                     p.1 = cubic_bezier(p.1, p.1, n.1, n.1, self.blend);
@@ -164,7 +164,7 @@ impl Animation {
         for  b in bones.iter_mut() {
             for v in &values[..] {
                 if v.0 == b.0 {
-                    b.1 = b.1 + v.1 * factor;
+                    b.1 += v.1 * factor;
                     break;
                 }
             }

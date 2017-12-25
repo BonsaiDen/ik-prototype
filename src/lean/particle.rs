@@ -84,7 +84,7 @@ impl Constraint for StickConstraint {
             // Fast inverse square root
             let dot = delta * delta;
             let x2 = dot * 0.5;
-            let x = 0x5f375a86 - (dot.to_bits() >> 1);
+            let x = 0x5f37_5a86 - (dot.to_bits() >> 1);
             let y = f32::from_bits(x);
             let delta_length = 1.0 / (y * (1.5 - (x2 * y * y)));
             let diff = (delta_length - self.rest_length) / (delta_length * (i1 + i2));
@@ -318,7 +318,7 @@ impl ParticleSystem {
     }
 
     pub fn visit_constraints<C: FnMut((usize, Vec2), (usize, Vec2), bool)>(&self, mut callback: C) {
-        for constraint in self.constraints.iter() {
+        for constraint in &self.constraints {
             let a = self.particles[constraint.first_particle()].position;
             let b = self.particles[constraint.second_particle()].position;
             callback(
