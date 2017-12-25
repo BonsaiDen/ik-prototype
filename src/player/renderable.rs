@@ -303,6 +303,7 @@ impl PlayerRenderable {
         if let Some(ref mut ragdoll) = self.ragdoll {
 
             self.ragdoll_timer += context.dt();
+
             let floor = self.skeleton.to_local(Vec2::new(0.0, level.floor));
             ragdoll.step(context.dt(), Vec2::new(0.0, 240.0), |p| {
                 if p.position.y > floor.y {
@@ -317,10 +318,9 @@ impl PlayerRenderable {
             self.skeleton.visit_mut(|bone| {
                 if let Some(parent) = bone.parent() {
                     let index = bone.index();
-                    bone.set_from_ragdoll(
-                        ragdoll.get(parent).position,
-                        ragdoll.get(index).position
-                    );
+                    let start = bone.transform(ragdoll.get(parent).position);
+                    let end = bone.transform(ragdoll.get(bone.index()).position);
+                    bone.set_from_ragdoll(start, end);
                 }
 
             }, false);
@@ -337,7 +337,7 @@ impl PlayerRenderable {
         self.scarf.get_mut(0).set_position(neck);
 
         self.scarf_timer += context.dt();
-        self.scarf.activate(); // Don't let the scarf fall into sleep
+        self.scarf.activate(); // Don't let the scarf fall into rest
         self.scarf.step(context.dt(), Vec2::new(-200.0 * facing.x, (self.scarf_timer * 4.0).sin() * 150.0), |p| {
             p.position.y = p.position.y.min(level.floor);
         });

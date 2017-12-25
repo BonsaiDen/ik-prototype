@@ -59,10 +59,11 @@ impl SkeletalData {
                 user_angle: 0.0,
 
                 start: Vec2::zero(),
-                end: Vec2::zero(),
 
                 world_position: Vec2::zero(),
                 local_transform: Vec2::new(1.0, 1.0),
+
+                particle: Particle::new(Vec2::zero()),
 
                 data: bone
             }
@@ -447,7 +448,7 @@ impl Skeleton {
             Vec2::zero()
 
         } else {
-            self.bones[bone.parent].end
+            self.bones[bone.parent].end_local()
         };
 
         // Calculate end offset from angle and length
@@ -495,11 +496,13 @@ pub struct Bone {
     user_angle: f32,
 
     start: Vec2, // parent.end
-    end: Vec2, // children[..].start
+    // end: Vec2, // children[..].start
 
     // Note: Only updated in skeleton visit_*() methods
     world_position: Vec2,
     local_transform: Vec2,
+
+    particle: Particle,
 
     data: &'static SkeletalBone
 }
@@ -517,7 +520,8 @@ impl ParticleLike for Bone {
     }
 
     fn to_particle(&self) -> Particle {
-        Particle::with_inv_mass(self.end_local(), 1.0)
+        //self.particle.clone()
+        Particle::with_inv_mass(self.transform(self.end_local()), 1.0)
     }
 
 }
@@ -550,16 +554,19 @@ impl Bone {
     }
 
     pub fn end_local(&self) -> Vec2 {
-        self.end
+        self.particle.position
     }
 
     pub fn end_world(&self) -> Vec2 {
-        self.end.scale(self.local_transform) + self.world_position
+        self.end_local().scale(self.local_transform) + self.world_position
     }
 
     pub fn to_local(&self, w: Vec2) -> Vec2 {
         (w - self.world_position).scale(self.local_transform)
-        //self.skeleton.to_local(b.position).scale(self.ragdoll_facing),
+    }
+
+    pub fn transform(&self, p: Vec2) -> Vec2 {
+        p.scale(self.local_transform)
     }
 
     pub fn length(&self) -> f32 {
@@ -576,13 +583,15 @@ impl Bone {
     }
 
 
-    // TODO WIP Ragdoll Placeholder -------------------------------------------
+    // Ragdoll ----------------------------------------------------------------
     pub fn enable_ragdoll(&mut self, enabled: bool) {
         if enabled {
-            // TODO set inv_mass to ragdoll_inv_mass
+            // Set to ragdoll_inv_mass
+            self.particle.set_invmass((self.data.1).4);
 
         } else {
-            // TODO set inv_mass to ik_inv_mass
+            // Set to ik_inv_mass
+            self.particle.set_invmass((self.data.1).3);
         }
     }
 
@@ -595,8 +604,7 @@ impl Bone {
     }
 
     fn set_end(&mut self, p: Vec2) {
-        // TODO update internal particle instead
-        self.end = p;
+        self.particle.set_position(p);
     }
 
 }

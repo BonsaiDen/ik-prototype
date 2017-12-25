@@ -165,7 +165,7 @@ impl Constraint for AngularConstraint {
 */
 
 // 2D Particle Abstraction ----------------------------------------------------
-#[derive(Default, Copy, Clone)]
+#[derive(Default, Debug, Copy, Clone)]
 pub struct Particle {
     pub position: Vec2,
     pub prev_position: Vec2,
