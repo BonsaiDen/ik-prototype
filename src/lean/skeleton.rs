@@ -19,7 +19,10 @@ use super::{Constraint, StickConstraint, Particle, ParticleLike, ParticleSystemL
 
 
 // Types ----------------------------------------------------------------------
-type SkeletalBoneDescription = (&'static str, f32, f32);
+type SkeletalBoneDescription = (
+    // Parent, length, angle, ik_inv_mass, ragdoll_inv_mass
+    &'static str, f32, f32, f32, f32
+);
 type SkeletalBone = (&'static str, SkeletalBoneDescription);
 
 
@@ -178,6 +181,14 @@ impl Skeleton {
 
         }
 
+    }
+
+
+    // TODO WIP Ragdoll Placeholder -------------------------------------------
+    pub fn enable_ragdoll(&mut self, enabled: bool) {
+        for bone in &mut self.bones {
+            bone.enable_ragdoll(enabled);
+        }
     }
 
 
@@ -506,7 +517,7 @@ impl ParticleLike for Bone {
     }
 
     fn to_particle(&self) -> Particle {
-        Particle::with_inv_mass(self.end_world(), 1.0)
+        Particle::with_inv_mass(self.end_local(), 1.0)
     }
 
 }
@@ -561,14 +572,31 @@ impl Bone {
 
     pub fn set_from_ragdoll(&mut self, start: Vec2, end: Vec2) {
         self.start = start;
-        self.end = end;
+        self.set_end(end);
     }
+
+
+    // TODO WIP Ragdoll Placeholder -------------------------------------------
+    pub fn enable_ragdoll(&mut self, enabled: bool) {
+        if enabled {
+            // TODO set inv_mass to ragdoll_inv_mass
+
+        } else {
+            // TODO set inv_mass to ik_inv_mass
+        }
+    }
+
 
     // Internal ---------------------------------------------------------------
     fn set(&mut self, values: (f32, Vec2, Vec2)) {
         self.tmp_update_angle = values.0;
         self.start = values.1;
-        self.end = values.2;
+        self.set_end(values.2);
+    }
+
+    fn set_end(&mut self, p: Vec2) {
+        // TODO update internal particle instead
+        self.end = p;
     }
 
 }

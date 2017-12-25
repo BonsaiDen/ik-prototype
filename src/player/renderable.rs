@@ -297,28 +297,30 @@ impl PlayerRenderable {
         // Update ragdoll
         let ragdoll_timer = self.ragdoll_timer;
 
-
         // TODO merge ragdoll into skeleton
         // TODO we'll need a closure for the time being until all configuration
         // TODO is embedded within the skeletal data structure
         if let Some(ref mut ragdoll) = self.ragdoll {
 
             self.ragdoll_timer += context.dt();
+            let floor = self.skeleton.to_local(Vec2::new(0.0, level.floor));
             ragdoll.step(context.dt(), Vec2::new(0.0, 240.0), |p| {
-                if p.position.y > level.floor {
+                if p.position.y > floor.y {
                     if ragdoll_timer > 1.0 {
                         p.set_invmass(0.5);
                     }
-                    p.position.y = p.position.y.min(level.floor);
+                    p.position.y = p.position.y.min(floor.y);
                 }
             });
 
             self.skeleton.set_local_transform(self.ragdoll_facing);
             self.skeleton.visit_mut(|bone| {
                 if let Some(parent) = bone.parent() {
-                    let start = bone.to_local(ragdoll.get(parent).position);
-                    let end = bone.to_local(ragdoll.get(bone.index()).position);
-                    bone.set_from_ragdoll(start, end);
+                    let index = bone.index();
+                    bone.set_from_ragdoll(
+                        ragdoll.get(parent).position,
+                        ragdoll.get(index).position
+                    );
                 }
 
             }, false);
