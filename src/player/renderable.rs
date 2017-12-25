@@ -191,7 +191,6 @@ pub struct PlayerRenderable {
 impl PlayerRenderable {
 
     pub fn from_skeleton(data: &'static SkeletalData, state: PlayerState, config: Config) -> Self {
-        // TODO fix initial position of particles
         let scarf = ParticleTemplate::schal(1, 6, 4.0, state.position);
         Self {
 
@@ -233,9 +232,52 @@ impl PlayerRenderable {
     }
 
     pub fn update(&mut self, dt: f32) {
-        if self.state.hp > 0 {
-            self.update_active(dt);
+
+        if self.state.hp == 0 {
+            return;
         }
+
+        if !self.was_grounded && self.state.is_grounded {
+            self.compression_timer = 0.0;
+            self.compression = self.config.land_compression;
+        }
+        if self.state.is_grounded {
+            self.compression_timer += dt;
+        }
+
+        self.compression *= self.config.land_compression_factor;
+
+        if !self.was_firing && self.state.is_firing {
+            self.recoil = self.config.recoil_force;
+
+        } else {
+            self.recoil *= self.config.recoil_damping;
+        }
+
+        if self.state.velocity.x == 0.0 && self.state.is_grounded && !self.state.is_crouching {
+            self.idle_timer += dt;
+
+        } else {
+            self.idle_timer = 0.0;
+        }
+
+        if self.state.velocity.x.abs() > 1.0 && self.state.is_grounded && !self.state.is_crouching {
+            self.run_timer += dt;
+
+        } else {
+            self.run_timer = 0.0;
+        }
+
+        if self.state.is_grounded && self.state.is_crouching {
+            self.crouch_timer += dt;
+
+        } else {
+            self.crouch_timer *= 0.9;
+        }
+
+        self.was_firing = self.state.is_firing;
+        self.was_grounded = self.state.is_grounded;
+
     }
 
     pub fn draw(&mut self, context: &mut Context, level: &Level) {
@@ -331,7 +373,7 @@ impl PlayerRenderable {
             let shoulder = self.skeleton.get_bone("Back").unwrap().end();
             let facing_shoulder = shoulder.scale(facing);
 
-            self.weapon.update(
+            self.weapon.step_static(
                 self.skeleton.to_world(facing_shoulder),
                 Vec2::new(-self.recoil, 0.0),
                 facing.flipped(),
@@ -347,7 +389,7 @@ impl PlayerRenderable {
             });
 
         } else {
-            self.weapon.step(context.dt(), Vec2::new(0.0, 240.0), |p| {
+            self.weapon.step_dynamic(context.dt(), Vec2::new(0.0, 240.0), |p| {
                 if p.position.y > level.floor {
                     if ragdoll_timer > 1.0 {
                         p.set_invmass(0.5);
@@ -373,8 +415,8 @@ impl PlayerRenderable {
             let force = Vec2::new(-16.0, -31.0).scale(facing);
 
             // Update weapon model to support ragdoll
-            self.weapon.activate_ragdoll();
-            self.weapon.apply_force(force * 0.5);
+            self.weapon.make_dynamic();
+            self.weapon.apply_dynamic_force(force * 0.5);
 
             // Create Skeleton Ragdoll
             let mut particles = ParticleSystem::new(self.skeleton.len(), 2);
@@ -437,51 +479,6 @@ impl PlayerRenderable {
 
 
     // Internal ---------------------------------------------------------------
-    fn update_active(&mut self, dt: f32) {
-
-        if !self.was_grounded && self.state.is_grounded {
-            self.compression_timer = 0.0;
-            self.compression = self.config.land_compression;
-        }
-        if self.state.is_grounded {
-            self.compression_timer += dt;
-        }
-
-        self.compression *= self.config.land_compression_factor;
-
-        if !self.was_firing && self.state.is_firing {
-            self.recoil = self.config.recoil_force;
-
-        } else {
-            self.recoil *= self.config.recoil_damping;
-        }
-
-        if self.state.velocity.x == 0.0 && self.state.is_grounded && !self.state.is_crouching {
-            self.idle_timer += dt;
-
-        } else {
-            self.idle_timer = 0.0;
-        }
-
-        if self.state.velocity.x.abs() > 1.0 && self.state.is_grounded && !self.state.is_crouching {
-            self.run_timer += dt;
-
-        } else {
-            self.run_timer = 0.0;
-        }
-
-        if self.state.is_grounded && self.state.is_crouching {
-            self.crouch_timer += dt;
-
-        } else {
-            self.crouch_timer *= 0.9;
-        }
-
-        self.was_firing = self.state.is_firing;
-        self.was_grounded = self.state.is_grounded;
-
-    }
-
     fn update_bones(&mut self, dt: f32, facing: Vec2, level: &Level) {
 
         // Aim Leanback

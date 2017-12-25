@@ -7,10 +7,6 @@
 // except according to those terms.
 
 
-// STD Dependencies -----------------------------------------------------------
-use std::collections::HashMap;
-
-
 // Internal Dependencies ------------------------------------------------------
 use super::Vec2;
 
@@ -20,7 +16,8 @@ use super::Vec2;
 pub struct Particle {
     pub position: Vec2,
     pub prev_position: Vec2,
-    m_position: Vec2,
+    rest_position: Vec2,
+    constant_force: Vec2,
     acceleration: Vec2,
     inv_mass: f32
 }
@@ -31,7 +28,8 @@ impl Particle {
         Self {
             position: position,
             prev_position: position,
-            m_position: position,
+            rest_position: position,
+            constant_force: Vec2::zero(),
             acceleration: Vec2::zero(),
             inv_mass: 1.0
         }
@@ -46,8 +44,12 @@ impl Particle {
         self.prev_position = p;
     }
 
-    pub fn apply_force(&mut self, p: Vec2) {
-        self.position = self.position + p;
+    pub fn apply_force(&mut self, force: Vec2) {
+        self.position = self.position + force;
+    }
+
+    pub fn apply_constant_force(&mut self, force: Vec2) {
+        self.constant_force = force;
     }
 
 }
@@ -103,18 +105,9 @@ impl ParticleSystem {
 
     }
 
-    pub fn init<C: FnMut(usize, &mut Particle)>(&mut self, mut callback: C) {
-        for (index, p) in self.particles.iter_mut().enumerate() {
-            callback(index, p);
-        }
-    }
-
+    // Getters ----------------------------------------------------------------
     pub fn active(&self) -> bool {
         self.activity > 0
-    }
-
-    pub fn activate(&mut self) {
-        self.activity = 10;
     }
 
     pub fn get(&self, index: usize) -> &Particle {
@@ -125,11 +118,25 @@ impl ParticleSystem {
         &mut self.particles[index]
     }
 
+    // Methods ----------------------------------------------------------------
+    pub fn activate(&mut self) {
+        self.activity = 10;
+    }
+
     pub fn add_constraint(&mut self, constraint: ParticleConstraint) {
         self.constraints.push(constraint);
         self.activate();
     }
 
+    pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collision: C) {
+        if self.active() {
+            self.accumulate_forces(gravity);
+            self.verlet(time_step);
+            self.satisfy_constraints(collision);
+        }
+    }
+
+    // Visitors ---------------------------------------------------------------
     pub fn visit_particles<C: FnMut(usize, &Particle, bool)>(&self, mut callback: C) {
         let is_awake = self.active();
         for (index, p) in self.particles.iter().enumerate() {
@@ -162,14 +169,7 @@ impl ParticleSystem {
         }
     }
 
-    pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collision: C) {
-        if self.active() {
-            self.accumulate_forces(gravity);
-            self.verlet(time_step);
-            self.satisfy_constraints(collision);
-        }
-    }
-
+    // Internal ---------------------------------------------------------------
     fn verlet(&mut self, time_step: f32) {
         for p in &mut self.particles {
             let current_pos = p.position;
@@ -180,12 +180,9 @@ impl ParticleSystem {
     }
 
     fn accumulate_forces(&mut self, gravity: Vec2) {
-
-        // All particles are affected by gravity
         for p in &mut self.particles {
-            p.acceleration = gravity;
+            p.acceleration = gravity + p.constant_force;
         }
-
     }
 
     fn satisfy_constraints<C: Fn(&mut Particle)>(&mut self, collision: C) {
@@ -198,9 +195,9 @@ impl ParticleSystem {
                 collision(&mut p);
 
                 // Check if the particle moved within the previous iteration
-                if (p.position - p.m_position).len().abs() > 0.1 {
+                if (p.position - p.rest_position).len().abs() > 0.1 {
                     any_particle_active = true;
-                    p.m_position = p.position;
+                    p.rest_position = p.position;
                 }
 
             }
@@ -241,102 +238,6 @@ impl ParticleSystem {
 }
 
 
-// Particle based Rigid Bodies ------------------------------------------------
-pub struct RigidBodyData {
-    pub points: Vec<(&'static str, f32, f32)>,
-    pub constraints: Vec<(&'static str, &'static str, bool)>
-}
-
-pub struct RigidBody {
-    angle: f32,
-    position: Vec2,
-    offset: Vec2,
-    scale: Vec2,
-    lines: Vec<((Vec2, usize), (Vec2, usize), bool)>,
-    particles: ParticleSystem
-}
-
-impl RigidBody {
-
-    pub fn new(data: &'static RigidBodyData) -> Self {
-
-        let mut particles = ParticleSystem::new(data.points.len(), 3);
-        let mut points = HashMap::new();
-        for (index, p) in data.points.iter().enumerate() {
-            points.insert(p.0, (Vec2::new(p.1, p.2), index));
-        }
-
-        let mut lines = Vec::new();
-        for c in &data.constraints {
-
-            let a = points[c.0];
-            let b = points[c.1];
-            let l = (a.0 - b.0).mag();
-
-            let mut constraint = ParticleConstraint::new(a.1, b.1, l);
-            if c.2 {
-                constraint.set_visual(true);
-            }
-            lines.push((a, b, c.2));
-            particles.add_constraint(constraint);
-
-        }
-
-        Self {
-            angle: 0.0,
-            position: Vec2::zero(),
-            offset: Vec2::zero(),
-            scale: Vec2::new(1.0, 1.0),
-            lines: lines,
-            particles: particles
-        }
-    }
-
-    pub fn update(&mut self, p: Vec2, offset: Vec2, scale: Vec2, angle: f32) {
-        self.position = p;
-        self.offset = offset;
-        self.scale = scale;
-        self.angle = angle;
-    }
-
-    pub fn visit_static<C: FnMut(Vec2, Vec2)>(&self, mut callback: C) {
-        for &(a, b, visual) in &self.lines {
-            if visual {
-                callback(
-                    (a.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position,
-                    (b.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position
-                );
-            }
-        }
-    }
-
-    pub fn activate_ragdoll(&mut self) {
-        self.particles.activate();
-        for &(a, b, _) in &self.lines {
-            let pa = (a.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
-            let pb = (b.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
-            self.particles.get_mut(a.1).set_position(pa);
-            self.particles.get_mut(b.1).set_position(pb);
-            self.particles.get_mut(a.1).set_invmass(1.0);
-            self.particles.get_mut(b.1).set_invmass(1.0);
-        }
-    }
-
-    pub fn apply_force(&mut self, force: Vec2) {
-        self.particles.get_mut(0).apply_force(force);
-    }
-
-    pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collision: C) {
-        self.particles.step(time_step, gravity, collision);
-    }
-
-    pub fn visit_dynamic<C: FnMut((usize, Vec2), (usize, Vec2), bool)>(&self, callback: C) {
-        self.particles.visit_constraints(callback);
-    }
-
-}
-
-
 // ParticleSystem Templates ----------------------------------------------------
 pub struct ParticleTemplate;
 impl ParticleTemplate {
@@ -346,7 +247,7 @@ impl ParticleTemplate {
         let mut particles = ParticleSystem::new(cols * rows,  2);
 
         // Intialize particles
-        particles.init(|i, p| {
+        particles.visit_particles_mut(|i, p, _| {
 
             p.set_position(position);
 
@@ -358,7 +259,6 @@ impl ParticleTemplate {
             }
 
         });
-
 
         // Intialize constraints
         for y in 0..rows {
