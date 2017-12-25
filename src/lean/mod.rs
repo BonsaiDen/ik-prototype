@@ -20,8 +20,7 @@ pub use self::particle::{
     Particle, ParticleLike, ParticleSystem, ParticleSystemLike, ParticleTemplate
 };
 
-mod library;
-pub use self::library::*;
+pub mod library;
 
 mod rigid_body;
 pub use self::rigid_body::{RigidBodyData, RigidBody};

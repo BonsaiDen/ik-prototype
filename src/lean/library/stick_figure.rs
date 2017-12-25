@@ -16,10 +16,11 @@ use lean::{
     Skeleton, SkeletalData,
     AnimationData,
     Angle, Vec2,
-    ParticleSystem, ParticleTemplate,
     RigidBodyData, RigidBody,
     f32_equals
 };
+
+use lean::library::{Attachement, LeanRenderer, LineRenderer, CircleRenderer, Scarf};
 
 
 // Statics --------------------------------------------------------------------
@@ -203,12 +204,6 @@ pub trait StickFigureState {
     fn is_firing(&self) -> bool;
 }
 
-pub trait StickFigureRenderer {
-    fn dt(&self) -> f32;
-    fn circle_vec(&mut self, c: Vec2, r: f32, color: u32);
-    fn line_vec(&mut self, start: Vec2, end: Vec2, color: u32);
-}
-
 
 // Configuration --------------------------------------------------------------
 #[derive(Clone)]
@@ -252,8 +247,6 @@ pub struct StickFigureConfig {
 }
 
 
-
-
 // Stick Figure Abstraction ---------------------------------------------------
 pub struct StickFigure<T: StickFigureState> {
 
@@ -274,8 +267,9 @@ pub struct StickFigure<T: StickFigureState> {
 
     // Visual feedback
     ragdoll_timer: f32,
+
     scarf_timer: f32,
-    scarf: ParticleSystem,
+    scarf: Scarf,
     weapon: RigidBody
 
 }
@@ -292,7 +286,6 @@ impl<T: StickFigureState> StickFigure<T> {
         config: StickFigureConfig
 
     ) -> Self {
-        let scarf = ParticleTemplate::schal(1, 6, 4.0, Vec2::zero());
         Self {
             config: config,
             state: state,
@@ -310,7 +303,7 @@ impl<T: StickFigureState> StickFigure<T> {
             ragdoll_timer: 0.0,
 
             scarf_timer: 0.0,
-            scarf: scarf,
+            scarf: Scarf::new(24.0, 6),
             weapon: RigidBody::new(&WEAPON_RIGID)
         }
     }
@@ -338,16 +331,14 @@ impl<T: StickFigureState> StickFigure<T> {
             self.ragdoll_timer = 0.0;
 
         } else if self.state.is_alive() && self.skeleton.has_ragdoll() {
-            self.scarf.visit_particles_mut(|_, particle| {
-                particle.set_position(Vec2::zero());
-            });
+            self.scarf.reset();
             self.skeleton.stop_ragdoll();
         }
 
     }
 
     pub fn draw<
-        R: StickFigureRenderer,
+        R: LeanRenderer + LineRenderer + CircleRenderer,
         C: Fn(&mut Vec2) -> bool,
         D: Fn(&mut Vec2) -> bool
 
@@ -440,21 +431,6 @@ impl<T: StickFigureState> StickFigure<T> {
             }
         }
 
-        // Draw scarf
-        // TODO abstract scarf and weapon into attachements
-        let neck = self.skeleton.get_bone_end_local("Neck");
-        self.scarf.get_mut(0).set_position(neck);
-
-        self.scarf.activate(); // Don't let the scarf fall into rest
-        self.scarf.step(dt, Vec2::new(-200.0 * facing.x, (self.scarf_timer * 4.0).sin() * self.config.fall_limit * 50.0), |p| {
-            collider_local(&mut p.position);
-        });
-
-        let neck_offset = self.skeleton.get_bone_end_world("Neck") - neck;
-        self.scarf.visit_particles_chained(|i, p, n| {
-            renderer.line_vec(neck_offset + p.position, neck_offset + n.position, 0x00ff_ff00);
-        });
-
         // Draw bones
         self.skeleton.visit(|bone| {
 
@@ -465,16 +441,30 @@ impl<T: StickFigureState> StickFigure<T> {
 
             let name = bone.name();
             if name == "Head" {
-                renderer.circle_vec(line.1, 4.0, 0x00d0_d0d0);
+                renderer.draw_circle(line.1, 4.0, 0x00d0_d0d0);
 
             } else if name == "L.Arm" || name == "L.Hand" || name == "L.Leg" || name == "L.Foot" {
-                renderer.line_vec(line.0, line.1, 0x0080_8080);
+                renderer.draw_line(line.0, line.1, 0x0080_8080);
 
             } else if name != "Root" {
-                renderer.line_vec(line.0, line.1, 0x00d0_d0d0);
+                renderer.draw_line(line.0, line.1, 0x00d0_d0d0);
             }
 
         }, false);
+
+        // Draw scarf
+        // TODO abstract scarf and weapon into attachements
+        let neck = self.skeleton.get_bone_end_local("Neck");
+        let neck_offset = self.skeleton.get_bone_end_world("Neck") - neck;
+        self.scarf.attach_with_offset(neck, neck_offset);
+        self.scarf.set_gravity(
+            Vec2::new(
+                -200.0 * facing.x,
+                self.config.fall_limit * 50.0
+            )
+        );
+        self.scarf.step(dt, &collider_local, &collider_world);
+        self.scarf.draw(renderer);
 
         // Draw Weapon
         // TODO move weapon out?
@@ -489,7 +479,7 @@ impl<T: StickFigureState> StickFigure<T> {
                 }
             });
             self.weapon.visit_dynamic(|(_, a), (_, b), _| {
-                renderer.line_vec(
+                renderer.draw_line(
                     a,
                     b,
                     0x00ff_ff00
@@ -506,7 +496,7 @@ impl<T: StickFigureState> StickFigure<T> {
             );
 
             self.weapon.visit_static(|a, b| {
-                renderer.line_vec(
+                renderer.draw_line(
                     a,
                     b,
                     0x00ff_ff00

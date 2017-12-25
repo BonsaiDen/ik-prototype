@@ -311,7 +311,7 @@ impl ParticleSystem {
         }
     }
 
-    pub fn visit_particles_chained<C: FnMut(usize, &Particle, &Particle)>(&mut self, mut callback: C) {
+    pub fn visit_particles_chained<C: FnMut(usize, &Particle, &Particle)>(&self, mut callback: C) {
         for i in 1..self.particles.len() {
             callback(i - 1, &self.particles[i - 1], &self.particles[i]);
         }

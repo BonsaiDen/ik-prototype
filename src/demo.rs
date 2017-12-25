@@ -12,7 +12,9 @@ use std::f32::consts::PI;
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{Vec2, StickFigure, StickFigureConfig};
+use lean::Vec2;
+use lean::library::{StickFigure, StickFigureConfig};
+
 use super::Context;
 use super::player::{Player, PlayerState};
 
