@@ -228,8 +228,7 @@ impl PlayerRenderable {
 
             // Setup skeleton ragdoll
             self.skeleton.start_ragdoll();
-            self.skeleton.apply_force("Root", force);
-            self.skeleton.apply_force("Head", force * 0.8);
+            self.skeleton.apply_local_force(Vec2::new(0.0, -10.0), force, 2.0);
             self.ragdoll_timer = 0.0;
 
         } else if self.state.hp > 0 && self.skeleton.has_ragdoll() {
@@ -385,7 +384,7 @@ impl PlayerRenderable {
         self.scarf.get_mut(0).set_position(neck);
 
         self.scarf.activate(); // Don't let the scarf fall into rest
-        self.scarf.step(dt, Vec2::new(-200.0 * facing.x, (self.scarf_timer * 4.0).sin() * 150.0), |p| {
+        self.scarf.step(dt, Vec2::new(-200.0 * facing.x, (self.scarf_timer * 4.0).sin() * self.config.fall_limit * 50.0), |p| {
             p.position.y = p.position.y.min(level.floor);
         });
 

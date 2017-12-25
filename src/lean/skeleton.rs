@@ -345,7 +345,37 @@ impl Skeleton {
 
     }
 
-    pub fn apply_force(&mut self, name: &'static str, force: Vec2) {
+    pub fn apply_world_force(&mut self, origin: Vec2, force: Vec2, width: f32) {
+        let origin = self.to_local(origin);
+        self.apply_local_force(origin, force, width);
+    }
+
+    pub fn apply_local_force(&mut self, origin: Vec2, force: Vec2, width: f32) {
+
+        // Strength
+        let strength = force.len();
+
+        // Direction of the force
+        let dir = force.unit();
+
+        // Calculate force for each bone
+        let forces: Vec<(&'static str, Vec2)> = self.bones.iter().map(|bone| {
+
+            // Distance from bone to origin
+            let d = 1.0 / ((bone.end_local() - origin).len() / width.max(1.0)).max(1.0);
+
+            // Force applied to this bone
+            (bone.name(), dir * strength * d)
+
+        }).collect();
+
+        for (name, force) in forces {
+            self.apply_force_to_bone(name, force);
+        }
+
+    }
+
+    pub fn apply_force_to_bone(&mut self, name: &'static str, force: Vec2) {
 
         let index = if let Some(bone) = self.get_bone(name) {
             Some(bone.index())

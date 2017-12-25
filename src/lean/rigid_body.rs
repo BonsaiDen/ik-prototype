@@ -34,7 +34,7 @@ impl RigidBody {
 
     pub fn new(data: &'static RigidBodyData) -> Self {
 
-        let mut particles = ParticleSystem::new(data.points.len(), 3);
+        let mut particles = ParticleSystem::new(data.points.len(), 4);
         let mut points = HashMap::new();
         for (index, p) in data.points.iter().enumerate() {
             points.insert(p.0, (Vec2::new(p.1, p.2), index));

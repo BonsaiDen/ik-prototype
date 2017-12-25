@@ -25,9 +25,9 @@ lazy_static! {
 
     static ref SKELETON: SkeletalData = SkeletalData {
         bones: vec![
-            (  "Root", ( "Root",  0.0, -D90, 0.00, 0.97)), // 0
+            (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
 
-            (  "Back", ( "Root", 17.0,  0.0, 0.00, 0.98)), // 1
+            (  "Back", ( "Root", 17.0,  0.0, 0.00, 0.99)), // 1
             (  "Neck", ( "Back",  2.0,  0.0, 0.00, 1.00)), // 2
             (  "Head", ( "Neck",  4.0,  0.0, 0.00, 0.99)), // 3
 
