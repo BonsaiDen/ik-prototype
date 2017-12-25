@@ -31,7 +31,7 @@ const HEIGHT: usize = 240;
 
 // Modules --------------------------------------------------------------------
 mod lean;
-use self::lean::Vec2;
+use self::lean::{StickFigureRenderer, Vec2};
 
 mod player;
 
@@ -171,6 +171,23 @@ impl Context {
                 self.buffer[y as usize * self.width + x as usize] = color;
             }
         }
+    }
+
+}
+
+impl StickFigureRenderer for Context {
+
+    fn dt(&self)-> f32 {
+        self.dt
+    }
+
+    fn circle_vec(&mut self, c: Vec2, r: f32, color: u32) {
+        self.circle(c.x, c.y, r, color);
+    }
+
+
+    fn line_vec(&mut self, start: Vec2, end: Vec2, color: u32) {
+        self.line(start.x, start.y, end.x, end.y, color);
     }
 
 }

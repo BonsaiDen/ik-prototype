@@ -12,5 +12,7 @@ mod standard_rifle;
 pub use self::standard_rifle::StandardRifle;
 
 mod stick_figure;
-pub use self::stick_figure::{StickFigureState, StickFigure, StickFigureConfig};
+pub use self::stick_figure::{
+    StickFigureConfig, StickFigureState, StickFigure, StickFigureRenderer
+};
 

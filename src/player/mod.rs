@@ -13,11 +13,7 @@ use std::f32::consts::PI;
 
 // Internal Dependencies ------------------------------------------------------
 use lean::{Angle, Vec2, f32_equals, StickFigureConfig, StickFigureState};
-use super::Context;
 use ::demo::Level;
-
-//mod renderable;
-//pub use self::renderable::PlayerRenderable;
 
 #[derive(Clone)]
 pub struct PlayerState {

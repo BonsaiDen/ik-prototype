@@ -12,48 +12,10 @@ use std::f32::consts::PI;
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{SkeletalData, Vec2, StickFigure, StickFigureConfig};
+use lean::{Vec2, StickFigure, StickFigureConfig};
 use super::Context;
 use super::player::{Player, PlayerState};
 
-
-// Statics --------------------------------------------------------------------
-const D90: f32 = PI * 0.5;
-
-lazy_static! {
-
-    static ref SKELETON: SkeletalData = SkeletalData {
-        bones: vec![
-            (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
-
-            (  "Back", ( "Root", 17.0,  0.0, 0.00, 0.99)), // 1
-            (  "Neck", ( "Back",  2.0,  0.0, 0.00, 1.00)), // 2
-            (  "Head", ( "Neck",  4.0,  0.0, 0.00, 0.99)), // 3
-
-            ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 4
-            ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 5
-            ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 6
-            ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 7
-
-            (  "Hip", ( "Root",   1.0,   PI, 0.00, 1.00)), // 8
-
-            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 1.00)), // 9
-            ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 10
-            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 1.00)), // 11
-            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 12
-        ],
-        constraints: vec![
-            ("Back", "L.Leg"),
-            ("Back", "R.Leg"),
-
-            ("Head", "L.Leg"),
-            ("Head", "R.Leg"),
-
-            ("Hip", "L.Arm"),
-            ("Hip", "R.Arm")
-        ]
-    };
-}
 
 // Demo Code ------------------------------------------------------------------
 pub struct Level {
@@ -154,9 +116,30 @@ impl Demo {
     }
 
     pub fn draw(&mut self, context: &mut Context) {
+
         self.figure.set_state(self.player.get_state());
-        self.figure.update(0.0166666);
-        self.figure.draw(context, &self.level);
+
+        let floor_world = Vec2::new(0.0, self.level.floor);
+        let floor_local = self.figure.to_local(floor_world);
+
+        self.figure.draw(context, |p| {
+            if p.y > floor_local.y {
+                p.y = p.y.min(floor_local.y);
+                true
+
+            } else {
+                false
+            }
+
+        }, |p| {
+            if p.y > floor_world.y {
+                p.y = p.y.min(floor_world.y);
+                true
+
+            } else {
+                false
+            }
+        });
         self.level.draw(context);
     }
 
