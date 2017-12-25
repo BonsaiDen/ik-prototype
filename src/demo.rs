@@ -13,7 +13,7 @@ use std::f32::consts::PI;
 
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
-use lean::library::{StickFigure, StickFigureConfig};
+use lean::library::{Renderer, Collider, StickFigure, StickFigureConfig};
 
 use super::Context;
 use super::player::{Player, PlayerState};
@@ -33,9 +33,48 @@ impl Level {
 
 }
 
+pub struct LevelCollider {
+    floor_local: Vec2,
+    floor_world: Vec2
+}
+
+impl LevelCollider {
+    fn from_level(level: &Level, offset: Vec2) -> Self {
+        let floor_world = Vec2::new(0.0, level.floor);
+        Self {
+            floor_world: floor_world,
+            floor_local: floor_world - offset
+        }
+    }
+}
+
+impl Collider for LevelCollider {
+
+    fn local(&self, p: &mut Vec2) -> bool {
+        if p.y > self.floor_local.y {
+            p.y = p.y.min(self.floor_local.y);
+            true
+
+        } else {
+            false
+        }
+    }
+
+    fn world(&self, p: &mut Vec2) -> bool {
+        if p.y > self.floor_world.y {
+            p.y = p.y.min(self.floor_world.y);
+            true
+
+        } else {
+            false
+        }
+    }
+
+}
+
 pub struct Demo {
     player: Player,
-    figure: StickFigure<PlayerState>,
+    figure: StickFigure<PlayerState, Context, LevelCollider>,
     level: Level,
     input_direction: f32
 }
@@ -121,28 +160,10 @@ impl Demo {
 
         self.figure.set_state(self.player.get_state());
 
-        let floor_world = Vec2::new(0.0, self.level.floor);
-        let floor_local = self.figure.to_local(floor_world);
-
-        self.figure.draw(context, |p| {
-            if p.y > floor_local.y {
-                p.y = p.y.min(floor_local.y);
-                true
-
-            } else {
-                false
-            }
-
-        }, |p| {
-            if p.y > floor_world.y {
-                p.y = p.y.min(floor_world.y);
-                true
-
-            } else {
-                false
-            }
-        });
+        let collider = LevelCollider::from_level(&self.level, self.figure.world_offset());
+        self.figure.draw(context, &collider);
         self.level.draw(context);
+
     }
 
 }

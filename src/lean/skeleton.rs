@@ -248,6 +248,14 @@ impl Skeleton {
         }
     }
 
+    pub fn local_transform(&self) -> Vec2 {
+        self.local_transform
+    }
+
+    pub fn world_offset(&self) -> Vec2 {
+        self.world_position
+    }
+
     pub fn to_local(&self, w: Vec2) -> Vec2 {
         w - self.world_position
     }

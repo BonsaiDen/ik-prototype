@@ -8,14 +8,15 @@
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{Vec2, ParticleSystem, ParticleTemplate};
-use lean::library::{Attachement, LeanRenderer, LineRenderer, CircleRenderer};
+use lean::{Vec2, ParticleSystem, ParticleTemplate, Skeleton};
+use lean::library::{Attachement, Renderer, Collider};
 
 
 // A Scarf --------------------------------------------------------------------
 pub struct Scarf {
     particles: ParticleSystem,
     offset: Vec2,
+    facing: Vec2,
     gravity: Vec2,
     timer: f32
 }
@@ -32,15 +33,19 @@ impl Scarf {
             ),
             offset: Vec2::zero(),
             gravity: Vec2::zero(),
+            facing: Vec2::new(1.0, 1.0),
             timer: 0.0
         }
     }
 
 }
 
-impl Attachement for Scarf {
+impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
 
-    fn attach_with_offset(&mut self, origin: Vec2, offset: Vec2) {
+    fn fixate(&mut self, skeleton: &Skeleton) {
+        let origin = skeleton.get_bone_end_local("Neck");
+        let offset = skeleton.get_bone_end_world("Neck") - origin;
+        self.facing = skeleton.local_transform();
         self.particles.get_mut(0).set_position(origin);
         self.offset = offset;
     }
@@ -49,29 +54,24 @@ impl Attachement for Scarf {
         self.gravity = gravity;
     }
 
-    fn step<
-        C: Fn(&mut Vec2) -> bool,
-        D: Fn(&mut Vec2) -> bool
-
-    >(&mut self, dt: f32, collider_local: &C, _: &D) {
+    fn step(&mut self, dt: f32, collider: &C) {
 
         self.timer += dt;
 
         // Don't let the scarf fall into rest
         self.particles.activate();
-
         self.particles.step(
             dt,
-            Vec2::new(self.gravity.x, (self.timer * 4.0).sin() * self.gravity.y),
+            Vec2::new(-200.0 * self.facing.x, (self.timer * 4.0).sin() * self.gravity.y * 0.5),
             |p| {
-                collider_local(&mut p.position);
+                collider.local(&mut p.position);
             }
         );
 
     }
 
-    fn draw<R: LeanRenderer + LineRenderer + CircleRenderer>(&self, renderer: &mut R) {
-        self.particles.visit_particles_chained(|i, p, n| {
+    fn draw(&self, renderer: &mut R) {
+        self.particles.visit_particles_chained(|_, p, n| {
             renderer.draw_line(self.offset + p.position, self.offset + n.position, 0x00ff_ff00);
         });
     }

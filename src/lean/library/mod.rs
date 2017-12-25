@@ -8,7 +8,7 @@
 
 
 // Internal Dependencies ------------------------------------------------------
-use ::lean::Vec2;
+use ::lean::{Skeleton, Vec2};
 
 
 // Modules --------------------------------------------------------------------
@@ -25,23 +25,22 @@ pub use self::stick_figure::{
 
 
 // Traits ---------------------------------------------------------------------
-pub trait Attachement {
-    fn attach_with_offset(&mut self, origin: Vec2, offset: Vec2);
-    fn set_gravity(&mut self, gravity: Vec2);
-    fn step<C: Fn(&mut Vec2) -> bool, D: Fn(&mut Vec2) -> bool>(&mut self, f32, &C, &D);
-    fn draw<R: LeanRenderer + LineRenderer + CircleRenderer>(&self, renderer: &mut R);
-    fn reset(&mut self);
-}
-
-pub trait LeanRenderer {
+pub trait Renderer {
     fn dt(&self) -> f32;
-}
-
-pub trait LineRenderer {
     fn draw_line(&mut self, start: Vec2, end: Vec2, color: u32);
+    fn draw_circle(&mut self, c: Vec2, r: f32, color: u32);
 }
 
-pub trait CircleRenderer {
-    fn draw_circle(&mut self, c: Vec2, r: f32, color: u32);
+pub trait Collider {
+    fn world(&self, &mut Vec2) -> bool;
+    fn local(&self, &mut Vec2) -> bool;
+}
+
+pub trait Attachement<R: Renderer, C: Collider> {
+    fn fixate(&mut self, skeleton: &Skeleton);
+    fn set_gravity(&mut self, gravity: Vec2);
+    fn step(&mut self, f32, &C);
+    fn draw(&self, renderer: &mut R);
+    fn reset(&mut self);
 }
 

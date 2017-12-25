@@ -20,7 +20,10 @@ use lean::{
     f32_equals
 };
 
-use lean::library::{Attachement, LeanRenderer, LineRenderer, CircleRenderer, Scarf};
+use lean::library::{
+    Attachement, Renderer, Collider,
+    Scarf
+};
 
 
 // Statics --------------------------------------------------------------------
@@ -248,7 +251,7 @@ pub struct StickFigureConfig {
 
 
 // Stick Figure Abstraction ---------------------------------------------------
-pub struct StickFigure<T: StickFigureState> {
+pub struct StickFigure<T: StickFigureState, R: Renderer, C: Collider> {
 
     // State inputs
     state: T,
@@ -268,13 +271,12 @@ pub struct StickFigure<T: StickFigureState> {
     // Visual feedback
     ragdoll_timer: f32,
 
-    scarf_timer: f32,
-    scarf: Scarf,
+    attachements: Vec<Box<Attachement<R, C>>>,
     weapon: RigidBody
 
 }
 
-impl<T: StickFigureState> StickFigure<T> {
+impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
     pub fn default(state: T, config: StickFigureConfig) -> Self {
         StickFigure::from_skeleton(&DEFAULT_FIGURE_SKELETON, state, config)
@@ -302,14 +304,13 @@ impl<T: StickFigureState> StickFigure<T> {
 
             ragdoll_timer: 0.0,
 
-            scarf_timer: 0.0,
-            scarf: Scarf::new(24.0, 6),
+            attachements: vec![Box::new(Scarf::new(24.0, 6))],
             weapon: RigidBody::new(&WEAPON_RIGID)
         }
     }
 
-    pub fn to_local(&self, p: Vec2) -> Vec2 {
-        self.skeleton.to_local(p)
+    pub fn world_offset(&self) -> Vec2 {
+        self.skeleton.world_offset()
     }
 
     pub fn set_state(&mut self, state: T) {
@@ -331,18 +332,19 @@ impl<T: StickFigureState> StickFigure<T> {
             self.ragdoll_timer = 0.0;
 
         } else if self.state.is_alive() && self.skeleton.has_ragdoll() {
-            self.scarf.reset();
+            for attachement in &mut self.attachements {
+                attachement.reset();
+            }
             self.skeleton.stop_ragdoll();
         }
 
     }
 
-    pub fn draw<
-        R: LeanRenderer + LineRenderer + CircleRenderer,
-        C: Fn(&mut Vec2) -> bool,
-        D: Fn(&mut Vec2) -> bool
-
-    >(&mut self, renderer: &mut R, collider_local: C, collider_world: D) {
+    pub fn draw(
+        &mut self,
+        renderer: &mut R,
+        collider: &C
+    ) {
 
         // Update timers
         let dt = renderer.dt();
@@ -400,7 +402,7 @@ impl<T: StickFigureState> StickFigure<T> {
         // Animate and Arrange
         let ragdoll_timer = self.ragdoll_timer;
         self.skeleton.step(dt, Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
-            if collider_local(&mut p.position) {
+            if collider.local(&mut p.position) {
                 if ragdoll_timer > 1.0 {
                     p.set_invmass(0.5);
                 }
@@ -421,12 +423,12 @@ impl<T: StickFigureState> StickFigure<T> {
         // Leg IK
         if self.state.is_grounded() {
             let mut foot_l = self.skeleton.get_bone_end_ik("L.Foot");
-            if collider_local(&mut foot_l) {
+            if collider.local(&mut foot_l) {
                 self.skeleton.apply_ik("L.Foot", foot_l, false);
             }
 
             let mut foot_r = self.skeleton.get_bone_end_ik("R.Foot");
-            if collider_local(&mut foot_r) {
+            if collider.local(&mut foot_r) {
                 self.skeleton.apply_ik("R.Foot", foot_r, false);
             }
         }
@@ -452,19 +454,13 @@ impl<T: StickFigureState> StickFigure<T> {
 
         }, false);
 
-        // Draw scarf
-        // TODO abstract scarf and weapon into attachements
-        let neck = self.skeleton.get_bone_end_local("Neck");
-        let neck_offset = self.skeleton.get_bone_end_world("Neck") - neck;
-        self.scarf.attach_with_offset(neck, neck_offset);
-        self.scarf.set_gravity(
-            Vec2::new(
-                -200.0 * facing.x,
-                self.config.fall_limit * 50.0
-            )
-        );
-        self.scarf.step(dt, &collider_local, &collider_world);
-        self.scarf.draw(renderer);
+        // Draw attachments
+        for attachement in &mut self.attachements {
+            attachement.fixate(&self.skeleton);
+            attachement.set_gravity(Vec2::new(0.0, self.config.fall_limit * 100.0));
+            attachement.step(dt, &collider);
+            attachement.draw(renderer);
+        }
 
         // Draw Weapon
         // TODO move weapon out?
@@ -472,7 +468,7 @@ impl<T: StickFigureState> StickFigure<T> {
         // TODO add arm movement to idle animation?
         if self.skeleton.has_ragdoll() {
             self.weapon.step_dynamic(dt, Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
-                if collider_world(&mut p.position) {
+                if collider.world(&mut p.position) {
                     if ragdoll_timer > 1.0 {
                         p.set_invmass(0.5);
                     }
@@ -513,7 +509,6 @@ impl<T: StickFigureState> StickFigure<T> {
         if self.skeleton.has_ragdoll() {
             self.ragdoll_timer += dt;
         }
-        self.scarf_timer += dt;
 
         if !self.state.is_alive() {
             return;
