@@ -182,19 +182,21 @@ pub struct PlayerRenderable {
     ragdoll_timer: f32,
     ragdoll_facing: Vec2,
     ragdoll: Option<ParticleSystem>,
-    headband_timer: f32,
-    headband: ParticleSystem,
+    scarf_timer: f32,
+    scarf: ParticleSystem,
     weapon: RigidBody
 
 }
 
 impl PlayerRenderable {
 
-    pub fn from_skeleton(data: &'static SkeletalData, config: Config) -> Self {
+    pub fn from_skeleton(data: &'static SkeletalData, state: PlayerState, config: Config) -> Self {
+        // TODO fix initial position of particles
+        let scarf = ParticleTemplate::schal(1, 6, 4.0, state.position);
         Self {
 
             config: config,
-            state: PlayerState::new(),
+            state: state,
 
             skeleton: Skeleton::new(data),
             crouch_timer: 0.0,
@@ -210,42 +212,39 @@ impl PlayerRenderable {
             ragdoll_facing: Vec2::zero(),
             ragdoll: None,
 
-            headband_timer: 0.0,
-            // TODO set initial position of particles
-            headband: ParticleTemplate::schal(1, 6, 4.0),
+            scarf_timer: 0.0,
+            scarf: scarf,
             weapon: RigidBody::new(&WEAPON_RIGID)
         }
     }
 
     pub fn set_state(&mut self, state: PlayerState) {
         self.state = state;
+        if self.state.hp == 0 && self.ragdoll.is_none() {
+            self.kill();
+
+        } else if self.state.hp > 0 && self.ragdoll.is_some() {
+            let p = self.state.position;
+            self.scarf.visit_particles_mut(|_, particle, _| {
+                particle.set_position(p);
+            });
+            self.ragdoll.take();
+        }
     }
 
     pub fn update(&mut self, dt: f32) {
-
-        // Rag-dolled or not
-        let facing = if self.ragdoll.is_some() {
-            self.ragdoll_timer += dt;
-            self.ragdoll_facing
-
-        } else {
+        if self.state.hp > 0 {
             self.update_active(dt);
-            Angle::facing(self.state.direction + D90).to_vec()
-        };
-
-        // Update headband
-        let neck = self.skeleton.get_bone("Neck").unwrap().end().scale(facing);
-        let neck = self.skeleton.to_world(neck);
-        self.headband.get_mut(0).set_position(neck);
-
+        }
     }
 
     pub fn draw(&mut self, context: &mut Context, level: &Level) {
 
         // Update ragdoll
         let ragdoll_timer = self.ragdoll_timer;
-        if let Some(ref mut ragdoll) = self.ragdoll {
-            ragdoll.step(context.dt(), Vec2::new(0.0, 240.0), |mut p| {
+        if self.ragdoll.is_some() {
+            self.ragdoll_timer += context.dt();
+            self.ragdoll.as_mut().unwrap().step(context.dt(), Vec2::new(0.0, 240.0), |mut p| {
                 if p.position.y > level.floor {
                     if ragdoll_timer > 1.0 {
                         p.set_invmass(0.5);
@@ -253,9 +252,10 @@ impl PlayerRenderable {
                     p.position.y = p.position.y.min(level.floor);
                 }
             });
+
         }
 
-        // Ragdoll or skeleton driven drawing
+        // Ragdoll or skeleton based drawing
         let facing = if let Some(ref ragdoll) = self.ragdoll {
 
             // Set bone positions from ragdoll particles
@@ -286,14 +286,18 @@ impl PlayerRenderable {
             facing
         };
 
-        // Headband
-        self.headband_timer += context.dt();
-        self.headband.activate(); // Don't let the headband fall into sleep
-        self.headband.step(context.dt(), Vec2::new(-200.0 * facing.x, (self.headband_timer * 4.0).sin() * 150.0), |p| {
+        // Draw scarf
+        let neck = self.skeleton.get_bone("Neck").unwrap().end().scale(facing);
+        let neck = self.skeleton.to_world(neck);
+        self.scarf.get_mut(0).set_position(neck);
+
+        self.scarf_timer += context.dt();
+        self.scarf.activate(); // Don't let the scarf fall into sleep
+        self.scarf.step(context.dt(), Vec2::new(-200.0 * facing.x, (self.scarf_timer * 4.0).sin() * 150.0), |p| {
             p.position.y = p.position.y.min(level.floor);
         });
 
-        self.headband.visit_particles_chained(|_, p, n, _| {
+        self.scarf.visit_particles_chained(|_, p, n, _| {
             context.line_vec(p.position, n.position, 0x00ffff00);
         });
 
@@ -360,10 +364,6 @@ impl PlayerRenderable {
             });
         }
 
-    }
-
-    pub fn reset(&mut self) {
-        self.ragdoll.take();
     }
 
     pub fn kill(&mut self) {
@@ -522,7 +522,6 @@ impl PlayerRenderable {
         let run_offset = ((self.run_timer * self.config.run_speed).sin() * self.config.run_compression) as f32 + self.config.run_compression * 2.0;
         let run_offset = Vec2::new(0.0, run_offset * ((self.run_timer * self.config.run_speed).min(1.0)));
 
-        // TODO walk compression
         self.skeleton.set_world_offset(
             self.state.position + self.config.offset + idle_offset + crouch_offset + run_offset + compression
         );

@@ -137,6 +137,13 @@ impl ParticleSystem {
         }
     }
 
+    pub fn visit_particles_mut<C: FnMut(usize, &mut Particle, bool)>(&mut self, mut callback: C) {
+        let is_awake = self.active();
+        for (index, p) in self.particles.iter_mut().enumerate() {
+            callback(index, p, is_awake);
+        }
+    }
+
     pub fn visit_particles_chained<C: FnMut(usize, &Particle, &Particle, bool)>(&mut self, mut callback: C) {
         let is_awake = self.active();
         for i in 1..self.particles.len() {
@@ -334,19 +341,14 @@ impl RigidBody {
 pub struct ParticleTemplate;
 impl ParticleTemplate {
 
-    pub fn schal(cols: usize, rows: usize, spacing: f32) -> ParticleSystem {
+    pub fn schal(cols: usize, rows: usize, spacing: f32, position: Vec2) -> ParticleSystem {
 
         let mut particles = ParticleSystem::new(cols * rows,  2);
 
         // Intialize particles
         particles.init(|i, p| {
 
-            let row = i / cols;
-            let col = i % cols;
-            p.set_position(Vec2::new(
-                (col as f32 * spacing) - cols as f32 * 0.5 * spacing,
-                (row as f32 * spacing) - rows as f32 * 0.5 * spacing
-            ));
+            p.set_position(position);
 
             if i == 0 || i == cols - 1 {
                 p.set_invmass(0.0);

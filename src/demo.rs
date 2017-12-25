@@ -101,9 +101,11 @@ impl Demo {
             crouch_speed: 1.0
         };
 
+        let player = Player::new(config.clone());
+        let renderable = PlayerRenderable::from_skeleton(&SKELETON, player.get_state(), config);
         Self {
-            player: Player::new(config.clone()),
-            renderable: PlayerRenderable::from_skeleton(&SKELETON, config),
+            player: player,
+            renderable: renderable,
             level: Level {
                 width,
                 floor: height * 0.75
@@ -130,11 +132,11 @@ impl Demo {
         }
 
         if kill {
-            self.renderable.kill();
+            self.player.set_hp(0);
         }
 
         if reset {
-            self.renderable.reset();
+            self.player.set_hp(255);
         }
 
         self.player.update_server(fire);

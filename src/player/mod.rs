@@ -57,6 +57,7 @@ pub struct PlayerState {
     position: Vec2,
     velocity: Vec2,
     direction: f32,
+    hp: u8,
     is_crouching: bool,
     is_firing: bool,
     is_grounded: bool
@@ -68,6 +69,7 @@ impl PlayerState {
             position: Vec2::new(160.0, 120.0),
             velocity: Vec2::zero(),
             direction: 0.0,
+            hp: 255,
             is_crouching: false,
             is_firing: false,
             is_grounded: false
@@ -95,6 +97,10 @@ impl Player {
             config: config,
             state: PlayerState::new(),
         }
+    }
+
+    pub fn set_hp(&mut self, hp: u8) {
+        self.state.hp = hp;
     }
 
     pub fn get_state(&self) -> PlayerState {
