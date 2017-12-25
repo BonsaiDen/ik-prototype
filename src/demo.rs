@@ -72,7 +72,6 @@ impl Demo {
     pub fn new(width: f32, height: f32) -> Self {
 
         let config = Config {
-            scale: 1.0,
             acceleration: 0.70,
             acceleration_max: 3.5,
             velocity_damping: 0.7,

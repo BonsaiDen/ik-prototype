@@ -21,7 +21,6 @@ pub use self::renderable::PlayerRenderable;
 
 #[derive(Clone)]
 pub struct Config {
-    pub scale: f32,
     pub acceleration: f32,
     pub acceleration_max: f32,
     pub velocity_damping: f32,
@@ -177,8 +176,8 @@ impl Player {
     }
 
     pub fn compute_view_angle(&self, at: Vec2) -> f32 {
-        let shoulder_height = self.config.shoulder_height * self.config.scale;
-        (at - (self.state.position * self.config.scale) + Vec2::new(0.0, shoulder_height) - self.config.offset * self.config.scale).angle()
+        let shoulder_height = self.config.shoulder_height;
+        (at - self.state.position + Vec2::new(0.0, shoulder_height) - self.config.offset).angle()
     }
 
     fn collide_with_level(&mut self, level: &Level) {
@@ -188,13 +187,13 @@ impl Player {
             self.state.velocity.x = 0.0;
         }
 
-        if self.state.position.x * self.config.scale > level.width {
-            self.state.position.x = level.width * (1.0 / self.config.scale);
+        if self.state.position.x > level.width {
+            self.state.position.x = level.width;
             self.state.velocity.x = 0.0;
         }
 
-        if self.state.position.y * self.config.scale > level.floor {
-            self.state.position.y = level.floor * (1.0 / self.config.scale);
+        if self.state.position.y > level.floor {
+            self.state.position.y = level.floor;
             self.state.velocity.y = 0.0;
             self.state.is_grounded = true;
         }

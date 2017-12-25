@@ -232,7 +232,7 @@ impl PlayerRenderable {
 
         // Update headband
         let neck = self.skeleton.get_bone("Neck").unwrap().end().scale(facing);
-        let neck = self.skeleton.to_world(neck) * self.config.scale;
+        let neck = self.skeleton.to_world(neck);
         self.headband.get_mut(0).set_position(neck);
 
     }
@@ -255,8 +255,6 @@ impl PlayerRenderable {
         // Ragdoll or skeleton driven drawing
         let facing = if let Some(ref ragdoll) = self.ragdoll {
 
-            let inv_scale = 1.0 / self.config.scale;
-
             // Set bone positions from ragdoll particles
             let mut positions = Vec::new();
             self.skeleton.visit_with_parents(|bone, parent| {
@@ -265,8 +263,8 @@ impl PlayerRenderable {
                     let p = ragdoll.get(parent.index());
                     positions.push((
                         bone.index(),
-                        self.skeleton.to_local(b.position * inv_scale).scale(self.ragdoll_facing),
-                        self.skeleton.to_local(p.position * inv_scale).scale(self.ragdoll_facing)
+                        self.skeleton.to_local(b.position).scale(self.ragdoll_facing),
+                        self.skeleton.to_local(p.position).scale(self.ragdoll_facing)
                     ));
                 }
 
@@ -287,6 +285,7 @@ impl PlayerRenderable {
 
         // Headband
         self.headband.activate(); // Don't let the headband fall into sleep
+        // TODO make the headband flail up and down in the wind using a sin() on some global timer
         self.headband.step(context.dt(), Vec2::new(-200.0 * facing.x, 60.0), |p| {
             p.position.y = p.position.y.min(level.floor);
         });
@@ -303,19 +302,18 @@ impl PlayerRenderable {
                 self.skeleton.to_world(bone.end().scale(facing))
             );
 
-            // Draw Head
             let name = bone.name();
             if name == "Head" {
-                context.circle_vec(line.1 * self.config.scale, 4.0 * self.config.scale, 0x00d0d0d0);
+                context.circle_vec(line.1, 4.0, 0x00d0d0d0);
 
             } else if name == "L.Arm" || name == "L.Hand" {
-                context.line_vec(line.0 * self.config.scale, line.1 * self.config.scale, 0x00808080);
+                context.line_vec(line.0, line.1, 0x00808080);
 
             } else if name == "L.Leg" || name == "L.Foot" {
-                context.line_vec(line.0 * self.config.scale, line.1 * self.config.scale, 0x00808080);
+                context.line_vec(line.0, line.1, 0x00808080);
 
             } else if name != "Root" {
-                context.line_vec(line.0 * self.config.scale, line.1 * self.config.scale, 0x00d0d0d0);
+                context.line_vec(line.0, line.1, 0x00d0d0d0);
             }
 
         }, false);
@@ -335,15 +333,20 @@ impl PlayerRenderable {
 
             self.weapon.visit_static(|a, b| {
                 context.line_vec(
-                    a * self.config.scale,
-                    b * self.config.scale,
+                    a,
+                    b,
                     0x00ff0000
                 );
             });
 
         } else {
             self.weapon.step(context.dt(), Vec2::new(0.0, 240.0), |p| {
-                p.position.y = p.position.y.min(level.floor);
+                if p.position.y > level.floor {
+                    if ragdoll_timer > 1.0 {
+                        p.set_invmass(0.5);
+                    }
+                    p.position.y = p.position.y.min(level.floor);
+                }
             });
             self.weapon.visit_dynamic(|(_, a), (_, b), _| {
                 context.line_vec(
@@ -377,7 +380,7 @@ impl PlayerRenderable {
                 {
                     let p = particles.get_mut(bone.index());
                     p.set_invmass(1.0);
-                    p.set_position(self.skeleton.to_world(bone.end().scale(facing)) * self.config.scale);
+                    p.set_position(self.skeleton.to_world(bone.end().scale(facing)));
                 }
 
                 if let Some(parent) = parent {
@@ -490,16 +493,15 @@ impl PlayerRenderable {
         self.skeleton.get_bone_mut("Neck").unwrap().set_user_angle(leanback * self.config.leanback_head_factor);
 
         // Place and update bones
-        let s = 1.0 / self.config.scale;
         if !self.state.is_grounded {
             self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * self.state.velocity.x.abs().max(1.0).min(1.125)), 0.05);
 
         } else if self.state.velocity.x.abs() > 0.5 {
             if self.state.velocity.x.signum() == facing.x {
-                self.skeleton.set_animation(&RUN_ANIMATION, 0.05 * s, 0.05);
+                self.skeleton.set_animation(&RUN_ANIMATION, 0.1, 0.05);
 
             } else {
-                self.skeleton.set_animation(&RUN_BACKWARDS_ANIMATION, 0.04 * s, 0.05);
+                self.skeleton.set_animation(&RUN_BACKWARDS_ANIMATION, 0.08, 0.05);
             }
 
         } else {
@@ -564,7 +566,7 @@ impl PlayerRenderable {
 
 
     fn collide_ground(&mut self, level: &Level, p: &mut Vec2) -> bool {
-        let floor = self.skeleton.to_local(Vec2::new(0.0, level.floor * (1.0 / self.config.scale)));
+        let floor = self.skeleton.to_local(Vec2::new(0.0, level.floor));
         if p.y > floor.y {
             p.y = floor.y;
             true
