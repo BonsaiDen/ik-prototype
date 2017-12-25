@@ -38,11 +38,12 @@ pub trait Collider {
 
 pub trait Attachement<R: Renderer, C: Collider> {
     fn loosen(&mut self, skeleton: &Skeleton);
+    fn fasten(&mut self, skeleton: &Skeleton);
     fn apply_force(&mut self, force: Vec2);
-    fn fixate(&mut self, skeleton: &Skeleton);
+    fn get_iks(&self, skeleton: &Skeleton, direction: f32, custom_offset: f32) -> Option<Vec<(&'static str, Vec2, bool)>>;
+    fn fixate(&mut self, skeleton: &Skeleton, angle: f32, custom_offset: f32);
     fn set_gravity(&mut self, gravity: Vec2);
     fn step(&mut self, f32, &C);
     fn draw(&self, renderer: &mut R);
-    fn reset(&mut self);
 }
 

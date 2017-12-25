@@ -42,10 +42,22 @@ impl Scarf {
 
 impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
 
-    fn loosen(&mut self, skeleton: &Skeleton) {}
-    fn apply_force(&mut self, force: Vec2) {}
+    fn loosen(&mut self, _: &Skeleton) {}
 
-    fn fixate(&mut self, skeleton: &Skeleton) {
+    fn fasten(&mut self, _: &Skeleton) {
+        self.particles.visit_particles_mut(|_, p| {
+            p.set_position(Vec2::zero());
+        });
+    }
+
+    fn apply_force(&mut self, _: Vec2) {}
+
+    // TODO Figure out how to cleanly allow access to custom figure properties
+    fn get_iks(&self, _: &Skeleton, _: f32, _: f32) -> Option<Vec<(&'static str, Vec2, bool)>> {
+        None
+    }
+
+    fn fixate(&mut self, skeleton: &Skeleton, _: f32, _: f32) {
         // TODO set attachment bone from the outside
         let origin = skeleton.get_bone_end_local("Neck");
         let offset = skeleton.get_bone_end_world("Neck") - origin;
@@ -77,12 +89,6 @@ impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
     fn draw(&self, renderer: &mut R) {
         self.particles.visit_particles_chained(|_, p, n| {
             renderer.draw_line(self.offset + p.position, self.offset + n.position, 0x00ff_ff00);
-        });
-    }
-
-    fn reset(&mut self) {
-        self.particles.visit_particles_mut(|_, p| {
-            p.set_position(Vec2::zero());
         });
     }
 

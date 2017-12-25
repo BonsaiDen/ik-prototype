@@ -16,13 +16,12 @@ use lean::{
     Skeleton, SkeletalData,
     AnimationData,
     Angle, Vec2,
-    RigidBodyData, RigidBody,
     f32_equals
 };
 
 use lean::library::{
     Attachement, Renderer, Collider,
-    Scarf
+    Scarf, StandardRifle
 };
 
 
@@ -176,23 +175,6 @@ lazy_static! {
         ]
     };
 
-    static ref WEAPON_RIGID: RigidBodyData = RigidBodyData {
-        points: vec![
-            ("Center", 15.0, 0.0),
-            ("Barrel", 30.0, 0.0),
-            ("StockMid", 0.0, 0.0),
-            ("StockLow", 0.0, 5.0),
-        ],
-        constraints: vec![
-            ("Center", "Barrel", true),
-            ("Center", "StockMid", true),
-            ("Center", "StockLow", true),
-            ("StockMid", "StockLow", true),
-            ("StockLow", "Barrel", false)
-        ]
-
-    };
-
 }
 
 
@@ -268,11 +250,11 @@ pub struct StickFigure<T: StickFigureState, R: Renderer, C: Collider> {
     was_firing: bool,
     was_grounded: bool,
 
-    // Visual feedback
-    ragdoll_timer: f32,
-
+    // Attachments
     attachements: Vec<Box<Attachement<R, C>>>,
-    weapon: RigidBody
+
+    // Visual feedback
+    ragdoll_timer: f32
 
 }
 
@@ -304,8 +286,10 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
             ragdoll_timer: 0.0,
 
-            attachements: vec![Box::new(Scarf::new(24.0, 6))],
-            weapon: RigidBody::new(&WEAPON_RIGID)
+            attachements: vec![
+                Box::new(Scarf::new(24.0, 6)),
+                Box::new(StandardRifle::new())
+            ]
         }
     }
 
@@ -323,8 +307,10 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             let force = Vec2::new(-16.0, -31.0).scale(facing);
 
             // Update weapon model to support ragdoll
-            self.weapon.make_dynamic();
-            self.weapon.apply_dynamic_force(force * 0.5);
+            for attachement in &mut self.attachements {
+                attachement.loosen(&self.skeleton);
+                attachement.apply_force(force * 0.5);
+            }
 
             // Setup skeleton ragdoll
             self.skeleton.start_ragdoll();
@@ -333,7 +319,7 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
         } else if self.state.is_alive() && self.skeleton.has_ragdoll() {
             for attachement in &mut self.attachements {
-                attachement.reset();
+                attachement.fasten(&self.skeleton);
             }
             self.skeleton.stop_ragdoll();
         }
@@ -351,19 +337,21 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
         self.update(dt);
 
         // Gather state data
-        let facing = Angle::facing(self.state.direction() + D90).to_vec();
+        let direction = self.state.direction();
+        let facing = Angle::facing(direction + D90).to_vec();
         let velocity = self.state.velocity();
         let position = self.state.position();
+        let ragdoll_timer = self.ragdoll_timer;
 
         self.skeleton.set_local_transform(facing);
 
         // Aim Leanback
         let aim_horizon = self.compute_view_horizon_distance();
         let leanback = (
-                aim_horizon * 0.5
-                - self.recoil * self.config.recoil_leanback_factor
+            aim_horizon * 0.5
+            - self.recoil * self.config.recoil_leanback_factor
 
-            ).min(self.config.leanback_max).max(self.config.leanback_min) * 0.009;;
+        ).min(self.config.leanback_max).max(self.config.leanback_min) * 0.009;;
 
         self.skeleton.get_bone_mut("Back").unwrap().set_user_angle(leanback + velocity.x * 0.05 * facing.x);
         self.skeleton.get_bone_mut("Neck").unwrap().set_user_angle(leanback * self.config.leanback_head_factor);
@@ -400,7 +388,6 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
         );
 
         // Animate and Arrange
-        let ragdoll_timer = self.ragdoll_timer;
         self.skeleton.step(dt, Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
             if collider.local(&mut p.position) {
                 if ragdoll_timer > 1.0 {
@@ -409,18 +396,16 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             }
         });
 
-        // Weapon Grip IK
-        // TODO abstract scarf and weapon into attachements
-        // TODO add IK position settings to weapon instead
-        // TODO have a holdable trait or something
-        let shoulder = self.skeleton.get_bone_end_ik("Back");
-        let grip_angle = Angle::transform(self.state.direction(), facing);
-        let grip = shoulder + Angle::offset(grip_angle, 17.0 - self.recoil) + Angle::offset(grip_angle + D90, 1.0);
-        let trigger = shoulder + Angle::offset(grip_angle, 6.5 - self.recoil * 0.5) + Angle::offset(grip_angle + D90, 4.0);
-        self.skeleton.apply_ik("L.Hand", grip, true);
-        self.skeleton.apply_ik("R.Hand", trigger, true);
+        // Attachement IKs
+        for attachement in &self.attachements {
+            if let Some(iks) = attachement.get_iks(&self.skeleton, direction, -self.recoil) {
+                for (bone, p, positive) in iks {
+                    self.skeleton.apply_ik(bone, p, positive);
+                }
+            }
+        }
 
-        // Leg IK
+        // Leg IKs
         if self.state.is_grounded() {
             let mut foot_l = self.skeleton.get_bone_end_ik("L.Foot");
             if collider.local(&mut foot_l) {
@@ -456,48 +441,10 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
         // Draw attachments
         for attachement in &mut self.attachements {
-            attachement.fixate(&self.skeleton);
+            attachement.fixate(&self.skeleton, direction, -self.recoil);
             attachement.set_gravity(Vec2::new(0.0, self.config.fall_limit * 100.0));
             attachement.step(dt, &collider);
             attachement.draw(renderer);
-        }
-
-        // Draw Weapon
-        // TODO move weapon out?
-        // TODO add arm movement to running animation?
-        // TODO add arm movement to idle animation?
-        if self.skeleton.has_ragdoll() {
-            self.weapon.step_dynamic(dt, Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
-                if collider.world(&mut p.position) {
-                    if ragdoll_timer > 1.0 {
-                        p.set_invmass(0.5);
-                    }
-                }
-            });
-            self.weapon.visit_dynamic(|(_, a), (_, b), _| {
-                renderer.draw_line(
-                    a,
-                    b,
-                    0x00ff_ff00
-                );
-            });
-
-        } else {
-            let shoulder = self.skeleton.get_bone_end_world("Back");
-            self.weapon.step_static(
-                shoulder,
-                Vec2::new(-self.recoil, 0.0),
-                facing.flipped(),
-                self.state.direction()
-            );
-
-            self.weapon.visit_static(|a, b| {
-                renderer.draw_line(
-                    a,
-                    b,
-                    0x00ff_ff00
-                );
-            });
         }
 
     }

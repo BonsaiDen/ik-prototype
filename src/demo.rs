@@ -7,10 +7,6 @@
 // except according to those terms.
 
 
-// STD Dependencies -----------------------------------------------------------
-use std::f32::consts::PI;
-
-
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
 use lean::library::{Collider, StickFigure, StickFigureConfig};
