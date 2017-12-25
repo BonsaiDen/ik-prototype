@@ -16,7 +16,6 @@ use lean::{
     Skeleton, SkeletalData,
     AnimationData,
     Angle, Vec2,
-    Constraint, StickConstraint,
     ParticleSystem, ParticleTemplate,
     RigidBodyData, RigidBody
 };
@@ -227,33 +226,8 @@ impl PlayerRenderable {
             self.weapon.make_dynamic();
             self.weapon.apply_dynamic_force(force * 0.5);
 
-            // Setup additional constraints for nicer looks
-            let additional_constraint_pairs = vec![
-                // Back legs
-                (1, 9, 1.0),
-                (1, 11, 1.0),
-
-                // Head legs
-                (3, 9, 1.00),
-                (3, 11, 1.00),
-
-                // Hip arms
-                (8, 4, 1.00),
-                (8, 6, 1.00)
-
-            ];
-
-            let mut constraints: Vec<Box<Constraint>> = Vec::new();
-            for (a, b, s) in additional_constraint_pairs {
-                let ap = self.skeleton.get_bone_index(a).end_local();
-                let bp = self.skeleton.get_bone_index(b).end_local();
-                let d = (ap - bp).len() * s;
-                constraints.push(Box::new(StickConstraint::new(a, b, d)));
-            }
-
-            self.skeleton.start_ragdoll(constraints);
-
-            // Apply initial force
+            // Setup skeleton ragdoll
+            self.skeleton.start_ragdoll();
             self.skeleton.apply_force("Root", force);
             self.skeleton.apply_force("Head", force * 0.8);
             self.ragdoll_timer = 0.0;

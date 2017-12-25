@@ -24,11 +24,13 @@ type SkeletalBoneDescription = (
     &'static str, f32, f32, f32, f32
 );
 type SkeletalBone = (&'static str, SkeletalBoneDescription);
+type SkeletalConstraint = (&'static str, &'static str);
 
 
 // Skeleton Data Abstraction --------------------------------------------------
 pub struct SkeletalData {
-    pub bones: Vec<SkeletalBone>
+    pub bones: Vec<SkeletalBone>,
+    pub constraints: Vec<SkeletalConstraint>
 }
 
 impl SkeletalData {
@@ -205,31 +207,23 @@ impl Skeleton {
         self.ragdoll_active
     }
 
-    pub fn start_ragdoll(&mut self, mut constraints: Vec<Box<Constraint>>) {
-
-        /*
-        for bone in &mut self.bones {
-            bone.enable_ragdoll(enabled);
-        }
-
-        if enabled {
-            // Set to ragdoll_inv_mass
-            self.particle.set_invmass((self.data.1).4);
-
-            // Setup transformed particle position
-            let end = self.transform(self.end_local());
-            self.particle.set_position(end);
-
-        } else {
-            // Set to ik_inv_mass
-            self.particle.set_invmass((self.data.1).3);
-        }
-        */
+    pub fn start_ragdoll(&mut self) {
 
         self.ragdoll_active = true;
         self.particles = self.get_particles();
         self.constraints = self.get_constraints();
-        self.constraints.append(&mut constraints);
+
+        // Additional skeletal constraints
+        for &(a, b) in &self.data.constraints {
+            let a = self.get_bone(a).unwrap().index();
+            let b = self.get_bone(b).unwrap().index();
+            let ap = self.get_bone_index(a).end_local();
+            let bp = self.get_bone_index(b).end_local();
+            self.constraints.push(
+                Box::new(StickConstraint::new(a, b, (ap - bp).len()))
+            );
+        }
+
         self.ragdoll_steps_until_rest = 10;
 
     }
@@ -317,6 +311,7 @@ impl Skeleton {
             return;
         }
 
+        // TODO replace IK with angular constraints?
         let (l1, l2, parent, index, origin, ca) = {
             let bone = self.get_bone(name).unwrap();
             (
