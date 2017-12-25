@@ -13,7 +13,7 @@ use std::f32::consts::PI;
 
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
-use lean::library::{Renderer, Collider, StickFigure, StickFigureConfig};
+use lean::library::{Collider, StickFigure, StickFigureConfig};
 
 use super::Context;
 use super::player::{Player, PlayerState};

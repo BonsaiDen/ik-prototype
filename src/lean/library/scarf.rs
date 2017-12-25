@@ -42,7 +42,11 @@ impl Scarf {
 
 impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
 
+    fn loosen(&mut self, skeleton: &Skeleton) {}
+    fn apply_force(&mut self, force: Vec2) {}
+
     fn fixate(&mut self, skeleton: &Skeleton) {
+        // TODO set attachment bone from the outside
         let origin = skeleton.get_bone_end_local("Neck");
         let offset = skeleton.get_bone_end_world("Neck") - origin;
         self.facing = skeleton.local_transform();

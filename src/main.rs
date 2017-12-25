@@ -32,7 +32,7 @@ const HEIGHT: usize = 240;
 // Modules --------------------------------------------------------------------
 mod lean;
 use self::lean::Vec2;
-use self::lean::library::{Renderer, Collider};
+use self::lean::library::Renderer;
 
 mod player;
 
