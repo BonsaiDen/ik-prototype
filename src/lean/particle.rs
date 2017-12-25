@@ -245,7 +245,7 @@ pub struct RigidBody {
     position: Vec2,
     offset: Vec2,
     scale: Vec2,
-    lines: Vec<((Vec2, usize), (Vec2, usize))>,
+    lines: Vec<((Vec2, usize), (Vec2, usize), bool)>,
     particles: ParticleSystem
 }
 
@@ -253,7 +253,7 @@ impl RigidBody {
 
     pub fn new(data: &'static RigidBodyData) -> Self {
 
-        let mut particles = ParticleSystem::new(data.points.len(), 1);
+        let mut particles = ParticleSystem::new(data.points.len(), 3);
         let mut points = HashMap::new();
         for (index, p) in data.points.iter().enumerate() {
             points.insert(p.0, (Vec2::new(p.1, p.2), index));
@@ -269,9 +269,8 @@ impl RigidBody {
             let mut constraint = ParticleConstraint::new(a.1, b.1, l);
             if c.2 {
                 constraint.set_visual(true);
-                lines.push((a, b));
             }
-
+            lines.push((a, b, c.2));
             particles.add_constraint(constraint);
 
         }
@@ -294,20 +293,25 @@ impl RigidBody {
     }
 
     pub fn visit_static<C: FnMut(Vec2, Vec2)>(&self, mut callback: C) {
-        for line in &self.lines {
-            callback(
-                ((line.0).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position,
-                ((line.1).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position
-            );
+        for &(a, b, visual) in &self.lines {
+            if visual {
+                callback(
+                    (a.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position,
+                    (b.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position
+                );
+            }
         }
     }
 
-    pub fn update_ragdoll(&mut self) {
-        for line in &self.lines {
-            let pa = ((line.0).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
-            let pb = ((line.1).0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
-            self.particles.get_mut((line.0).1).set_position(pa);
-            self.particles.get_mut((line.1).1).set_position(pb);
+    pub fn activate_ragdoll(&mut self) {
+        self.particles.activate();
+        for &(a, b, _) in &self.lines {
+            let pa = (a.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
+            let pb = (b.0 + self.offset).scale(self.scale).rotate(self.angle) + self.position;
+            self.particles.get_mut(a.1).set_position(pa);
+            self.particles.get_mut(b.1).set_position(pb);
+            self.particles.get_mut(a.1).set_invmass(1.0);
+            self.particles.get_mut(b.1).set_invmass(1.0);
         }
     }
 
@@ -319,7 +323,7 @@ impl RigidBody {
         self.particles.step(time_step, gravity, collision);
     }
 
-    pub fn visit_dynamic<C: FnMut((usize, Vec2), (usize, Vec2), bool)>(&self, mut callback: C) {
+    pub fn visit_dynamic<C: FnMut((usize, Vec2), (usize, Vec2), bool)>(&self, callback: C) {
         self.particles.visit_constraints(callback);
     }
 
@@ -332,7 +336,7 @@ impl ParticleTemplate {
 
     pub fn schal(cols: usize, rows: usize, spacing: f32) -> ParticleSystem {
 
-        let mut particles = ParticleSystem::new(cols * rows,  1);
+        let mut particles = ParticleSystem::new(cols * rows,  2);
 
         // Intialize particles
         particles.init(|i, p| {

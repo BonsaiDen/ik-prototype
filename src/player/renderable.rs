@@ -146,15 +146,14 @@ lazy_static! {
         points: vec![
             ("Center", 15.0, 0.0),
             ("Barrel", 30.0, 0.0),
-            ("StockHigh", 0.0, 0.0),
+            ("StockMid", 0.0, 0.0),
             ("StockLow", 0.0, 5.0),
-            ("UpperMid", 0.0, -15.0)
         ],
         constraints: vec![
             ("Center", "Barrel", true),
-            ("Center", "StockHigh", true),
+            ("Center", "StockMid", true),
             ("Center", "StockLow", true),
-            ("StockHigh", "StockLow", true),
+            ("StockMid", "StockLow", true),
             ("StockLow", "Barrel", false)
         ]
 
@@ -183,6 +182,7 @@ pub struct PlayerRenderable {
     ragdoll_timer: f32,
     ragdoll_facing: Vec2,
     ragdoll: Option<ParticleSystem>,
+    headband_timer: f32,
     headband: ParticleSystem,
     weapon: RigidBody
 
@@ -209,7 +209,10 @@ impl PlayerRenderable {
             ragdoll_timer: 0.0,
             ragdoll_facing: Vec2::zero(),
             ragdoll: None,
-            headband: ParticleTemplate::schal(1, 4, 7.0),
+
+            headband_timer: 0.0,
+            // TODO set initial position of particles
+            headband: ParticleTemplate::schal(1, 6, 4.0),
             weapon: RigidBody::new(&WEAPON_RIGID)
         }
     }
@@ -284,9 +287,9 @@ impl PlayerRenderable {
         };
 
         // Headband
+        self.headband_timer += context.dt();
         self.headband.activate(); // Don't let the headband fall into sleep
-        // TODO make the headband flail up and down in the wind using a sin() on some global timer
-        self.headband.step(context.dt(), Vec2::new(-200.0 * facing.x, 60.0), |p| {
+        self.headband.step(context.dt(), Vec2::new(-200.0 * facing.x, (self.headband_timer * 4.0).sin() * 150.0), |p| {
             p.position.y = p.position.y.min(level.floor);
         });
 
@@ -335,7 +338,7 @@ impl PlayerRenderable {
                 context.line_vec(
                     a,
                     b,
-                    0x00ff0000
+                    0x00ffff00
                 );
             });
 
@@ -352,7 +355,7 @@ impl PlayerRenderable {
                 context.line_vec(
                     a,
                     b,
-                    0x00ff0000
+                    0x00ffff00
                 );
             });
         }
@@ -370,7 +373,7 @@ impl PlayerRenderable {
             let force = Vec2::new(-16.0, -31.0).scale(facing);
 
             // Update weapon model to support ragdoll
-            self.weapon.update_ragdoll();
+            self.weapon.activate_ragdoll();
             self.weapon.apply_force(force * 0.5);
 
             // Create Skeleton Ragdoll

@@ -47,7 +47,7 @@ fn main() {
         WIDTH,
         HEIGHT,
         WindowOptions {
-           scale: Scale::X2,
+           scale: Scale::X4,
             .. WindowOptions::default()
         }).unwrap_or_else(|e| {
             panic!("{}", e);
