@@ -41,10 +41,10 @@ lazy_static! {
             (  "Neck", ( "Back",  2.0,  0.0, 0.00, 1.00)), // 2
             (  "Head", ( "Neck",  4.0,  0.0, 0.00, 0.99)), // 3
 
-            ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 4
-            ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 5
             ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 6
             ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 7
+            ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 4
+            ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 5
 
             (  "Hip", ( "Root",   1.0,   PI, 0.00, 1.00)), // 8
 
@@ -67,14 +67,32 @@ lazy_static! {
 
     static ref IDLE_ANIMATION: AnimationData = AnimationData {
         name: "Idle",
-        duration: 2.0,
+        duration: 6.25,
         key_frames: vec![
             // Pose
             (0.0, vec![
                 ( "L.Leg", -D22),
                 ("L.Foot",  0.0),
                 ( "R.Leg",  D22),
-                ("R.Foot",  0.0)
+                ("R.Foot",  0.0),
+
+                ( "R.Arm", D90 * 1.25),
+                ("R.Hand",  -D90),
+                ( "L.Arm",  -D90 * 0.5),
+                ("L.Hand",  -D45 * 1.65)
+            ]),
+            // Matches the idle compression
+            (6.25 * 0.5, vec![
+                ( "L.Leg", -D22),
+                ("L.Foot",  0.0),
+                ( "R.Leg",  D22),
+                ("R.Foot",  0.0),
+
+                ( "R.Arm", D90 * 1.0),
+                ("R.Hand",  -D90),
+                ( "L.Arm",  -D90 * 0.75),
+                ("L.Hand",  -D45 * 1.65)
+
             ])
         ]
     };
@@ -88,14 +106,26 @@ lazy_static! {
                 ( "L.Leg", -D12 * 3.5 + -D22),
                 ("L.Foot",  D22 * 5.0),
                 ( "R.Leg", -D12 * 5.0 +  D22),
-                ("R.Foot",  D22 * 5.0)
+                ("R.Foot",  D22 * 5.0),
+
+                ( "R.Arm",  -D45 * 1.25),
+                ("R.Hand",  -D45 * 1.25),
+
+                ( "L.Arm",  D45 * 1.05),
+                ("L.Hand",  D45 * 1.05)
             ]),
             // 2
             (1.0, vec![
                 ( "R.Leg", -D12 * 5.0 + -D22),
                 ("R.Foot",  D22 * 4.0),
                 ( "L.Leg", -D12 * 3.5 +  D22),
-                ("L.Foot",  D22 * 4.0)
+                ("L.Foot",  D22 * 4.0),
+
+                ( "R.Arm",  -D45 * 0.5),
+                ("R.Hand",  -D45 * 0.5),
+
+                ( "L.Arm",  D45 * 0.4),
+                ("L.Hand",  D45 * 0.4)
             ]),
         ]
     };
@@ -109,28 +139,52 @@ lazy_static! {
                 ( "L.Leg", -D45 * 1.15),
                 ("L.Foot",  D45 * 1.95),
                 ( "R.Leg", -D12),
-                ("R.Foot",  D45)
+                ("R.Foot",  D45),
+
+                ( "R.Arm", D90 * 1.25),
+                ("R.Hand",  -D90 * 0.90),
+                ( "L.Arm", -D90 * 0.75),
+                ("L.Hand",  -D90 * 0.90),
+
             ]),
             // Reach
             (3.0, vec![
                 ( "L.Leg",  -D45 * 0.95),
                 ("L.Foot",  D12 * 0.5),
                 ( "R.Leg",  D45),
-                ("R.Foot",  D45 * 1.35)
+                ("R.Foot",  D45 * 1.35),
+
+                ( "R.Arm", D90 * 1.95),
+                ("R.Hand",  -D90 * 0.90),
+
+                ( "L.Arm", -D90 * 1.45),
+                ("L.Hand",  -D90 * 0.90),
+
             ]),
-            // Pass with Legs Swapped
+            // // // Pass with Legs Swapped
             (5.0, vec![
                 ( "R.Leg", -D45 * 1.15),
                 ("R.Foot",  D45 * 1.95),
                 ( "L.Leg", -D12),
-                ("L.Foot",  D45)
+                ("L.Foot",  D45),
+
+                ( "R.Arm", D90 * 1.25), // TODO slightly adjust
+                ("R.Hand",  -D90 * 0.90),
+                ( "L.Arm", -D90 * 0.75), // TODO slightly adjust
+                ("L.Hand",  -D90 * 0.90),
+
             ]),
-            // Reach Mirrored
+            // // // Reach Mirrored
             (8.0, vec![
                 ( "R.Leg",  -D45 * 0.95),
                 ("R.Foot",  D12 * 0.5),
                 ( "L.Leg",  D45),
-                ("L.Foot",  D45 * 1.35)
+                ("L.Foot",  D45 * 1.35),
+
+                ( "R.Arm", D90 * 0.5),
+                ("R.Hand",  -D90 * 0.90),
+                ( "L.Arm", -D90 * 0.05),
+                ("L.Hand",  -D90 * 0.90),
             ])
         ]
     };
@@ -145,7 +199,12 @@ lazy_static! {
                 ( "L.Leg", -D12 * 1.25),
                 ("L.Foot", D45 * 1.5),
                 ( "R.Leg", D12 * 0.25),
-                ("R.Foot", D22 * 0.25)
+                ("R.Foot", D22 * 0.25),
+
+                ( "R.Arm", D90 * 1.25),
+                ("R.Hand",  -D90 * 0.40),
+                ( "L.Arm", -D90 * 0.85),
+                ("L.Hand",  -D90 * 0.50)
             ]),
 
             // Reach
@@ -153,15 +212,25 @@ lazy_static! {
                 ( "L.Leg", -D22 * 1.25),
                 ("L.Foot", D12),
                 ( "R.Leg", D12),
-                ("R.Foot", D22)
+                ("R.Foot", D22),
+
+                ( "R.Arm", D90 * 1.50),
+                ("R.Hand",  -D90 * 0.50),
+                ( "L.Arm", -D90 * 1.15),
+                ("L.Hand",  -D90 * 0.50)
             ]),
 
-            // Pass
+            // // Pass
             (5.0, vec![
                 ( "R.Leg", -D12 * 1.25),
                 ("R.Foot", D45 * 1.5),
                 ( "L.Leg", D12 * 0.25),
-                ("L.Foot", D22 * 0.25)
+                ("L.Foot", D22 * 0.25),
+
+                ( "R.Arm", D90 * 1.25),
+                ("R.Hand",  -D90 * 0.40),
+                ( "L.Arm", -D90 * 0.85),
+                ("L.Hand",  -D90 * 0.50)
             ]),
 
             // Reach
@@ -169,7 +238,14 @@ lazy_static! {
                 ( "R.Leg", -D22 * 1.25),
                 ("R.Foot", D12),
                 ( "L.Leg", D12),
-                ("L.Foot", D22)
+                ("L.Foot", D22),
+
+                ( "R.Arm", D90 * 1.00),
+                ("R.Hand",  -D90 * 0.60),
+
+                ( "L.Arm", -D90 * 0.60),
+                ("L.Hand",  -D90 * 0.60)
+
             ])
 
         ]
@@ -358,18 +434,18 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
         // Place and update bones
         if !self.state.is_grounded() {
-            self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * velocity.x.abs().max(1.0).min(1.125)), 0.05);
+            self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * velocity.x.abs().max(1.0).min(1.125)), 0.1);
 
         } else if velocity.x.abs() > 0.5 {
             if f32_equals(velocity.x.signum(), facing.x) {
-                self.skeleton.set_animation(&RUN_ANIMATION, 0.1, 0.05);
+                self.skeleton.set_animation(&RUN_ANIMATION, 0.1, 0.1);
 
             } else {
                 self.skeleton.set_animation(&RUN_BACKWARDS_ANIMATION, 0.08, 0.05);
             }
 
         } else {
-            self.skeleton.set_animation(&IDLE_ANIMATION, 0.1, 0.05);
+            self.skeleton.set_animation(&IDLE_ANIMATION, 1.0 / self.config.idle_speed, 0.1);
         }
 
         // Offsets
@@ -427,17 +503,17 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             );
 
             let name = bone.name();
-            if name == "Head" {
-                renderer.draw_circle(line.1, 4.0, 0x00d0_d0d0);
-
-            } else if name == "L.Arm" || name == "L.Hand" || name == "L.Leg" || name == "L.Foot" {
+            if name == "R.Arm" || name == "R.Hand" || name == "L.Leg" || name == "L.Foot" {
                 renderer.draw_line(line.0, line.1, 0x0080_8080);
 
-            } else if name != "Root" {
+            } else if name != "Root" && name != "Head" {
                 renderer.draw_line(line.0, line.1, 0x00d0_d0d0);
             }
 
-        }, false);
+        }, true);
+
+        let head = self.skeleton.get_bone_end_world("Head");
+        renderer.draw_circle(head, 4.0, 0x00d0_d0d0);
 
         // Draw attachments
         for attachement in &mut self.attachements {
