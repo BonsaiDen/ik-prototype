@@ -15,7 +15,7 @@ use std::collections::HashMap;
 // Internal Dependencies ------------------------------------------------------
 use super::{Angle, Vec2};
 use super::animation::{AnimationFrameBone, AnimationData, AnimationBlender};
-use super::{Constraint, StickConstraint, Particle, ParticleLike, ParticleSystemLike};
+use super::{Constraint, StickConstraint, Particle, ParticleLike, ParticleSystemLike, ParticleSystem};
 
 
 // Types ----------------------------------------------------------------------
@@ -59,11 +59,10 @@ impl SkeletalData {
                 user_angle: 0.0,
 
                 start: Vec2::zero(),
+                end: Vec2::zero(),
 
                 world_position: Vec2::zero(),
                 local_transform: Vec2::new(1.0, 1.0),
-
-                particle: Particle::new(Vec2::zero()),
 
                 data: bone
             }
@@ -129,11 +128,19 @@ pub struct Skeleton {
     local_transform: Vec2,
     world_position: Vec2,
 
+    // Particles
+    particles: Vec<Particle>,
+    constraints: Vec<Box<Constraint>>,
+
     // Animation offsets, with rest angles as defaults
     bone_rest_angles: Vec<AnimationFrameBone>,
 
     // Animation data
-    animation: AnimationBlender
+    animation: AnimationBlender,
+
+    // Ragdoll
+    ragdoll_active: bool,
+    ragdoll_steps_until_rest: usize
 
 }
 
@@ -176,30 +183,75 @@ impl Skeleton {
             local_transform: Vec2::new(1.0, 1.0),
             world_position: Vec2::zero(),
 
+            // Particles
+            particles: Vec::new(),
+            constraints: Vec::new(),
+
             // Animations
             bone_rest_angles: data.to_animation_bones(),
-            animation: AnimationBlender::new()
+            animation: AnimationBlender::new(),
+
+            // Ragdoll
+            ragdoll_active: false,
+            ragdoll_steps_until_rest: 0
 
         }
 
     }
 
 
-    // TODO WIP Ragdoll Placeholder -------------------------------------------
-    pub fn enable_ragdoll(&mut self, enabled: bool) {
+    // Ragdolls ---------------------------------------------------------------
+    pub fn has_ragdoll(&self) -> bool {
+        self.ragdoll_active
+    }
+
+    pub fn start_ragdoll(&mut self, mut constraints: Vec<Box<Constraint>>) {
+
+        /*
         for bone in &mut self.bones {
             bone.enable_ragdoll(enabled);
         }
+
+        if enabled {
+            // Set to ragdoll_inv_mass
+            self.particle.set_invmass((self.data.1).4);
+
+            // Setup transformed particle position
+            let end = self.transform(self.end_local());
+            self.particle.set_position(end);
+
+        } else {
+            // Set to ik_inv_mass
+            self.particle.set_invmass((self.data.1).3);
+        }
+        */
+
+        self.ragdoll_active = true;
+        self.particles = self.get_particles();
+        self.constraints = self.get_constraints();
+        self.constraints.append(&mut constraints);
+        self.ragdoll_steps_until_rest = 10;
+
+    }
+
+    pub fn stop_ragdoll( &mut self) {
+        self.ragdoll_active = false;
+        self.particles.clear();
+        self.constraints.clear();
     }
 
 
     // Offsets & Positions ----------------------------------------------------
     pub fn set_local_transform(&mut self, transform: Vec2) {
-        self.local_transform = transform;
+        if !self.ragdoll_active {
+            self.local_transform = transform;
+        }
     }
 
     pub fn set_world_offset(&mut self, p: Vec2) {
-        self.world_position = p;
+        if !self.ragdoll_active {
+            self.world_position = p;
+        }
     }
 
     pub fn to_local(&self, w: Vec2) -> Vec2 {
@@ -210,51 +262,60 @@ impl Skeleton {
         p + self.world_position
     }
 
-    pub fn local_transform(&self) -> Vec2 {
-        self.local_transform
-    }
-
-
-    // Updating & Animation ---------------------------------------------------
-    pub fn animate(&mut self, dt: f32) {
-
-        // Reset animation rest angles
-        self.data.reset_animation_bones(&mut self.bone_rest_angles[..]);
-
-        // Apply animations to rest angles
-        self.animation.update(dt, &mut self.bone_rest_angles[..]);
-
-    }
-
-    pub fn set_animation(
-        &mut self,
-        data: &'static AnimationData,
-        speed_factor: f32,
-        blend_duration: f32
-    ) {
-        self.animation.set(data, blend_duration, speed_factor);
-    }
-
 
     // Updating ---------------------------------------------------------------
-    pub fn arrange(&mut self) {
+    pub fn step<C: Fn(&mut Particle)>(&mut self, dt: f32, gravity: Vec2, collider: C) {
 
-        // Reset all bones to the base skeleton angles
-        for i in &self.child_last_indices {
-            let bone = &mut self.bones[*i];
-            bone.tmp_update_angle = 0.0;
-            bone.current_angle = self.bone_rest_angles[*i].1;
-        }
+        if self.ragdoll_active {
 
-        // Update all bones relative to their parents
-        for i in &self.child_last_indices {
-            let values = self.calculate_bone(*i);
-            self.bones[*i].set(values);
+            if self.ragdoll_steps_until_rest > 0 {
+
+                ParticleSystem::accumulate_forces(gravity, &mut self.particles[..]);
+                ParticleSystem::verlet(dt, &mut self.particles[..]);
+                if !ParticleSystem::satisfy_constraints(2, &mut self.particles[..], &self.constraints[..], collider) {
+                    self.ragdoll_steps_until_rest = self.ragdoll_steps_until_rest.saturating_sub(1);
+                }
+
+                // Re-apply bone modifications
+                for i in &self.child_last_indices{
+                    if let Some(parent) = self.bones[*i].parent() {
+                        let index = self.bones[*i].index();
+                        let start = self.bones[*i].transform(self.particles[parent].position);
+                        let end = self.bones[*i].transform(self.particles[index].position);
+                        self.bones[*i].set_from_ragdoll(start, end);
+                    }
+                }
+
+
+            }
+
+        } else {
+
+            // Forward animations and calculate animation bone angles
+            self.animate(dt);
+
+            // Reset all bones to the base skeleton angles
+            for i in &self.child_last_indices {
+                let bone = &mut self.bones[*i];
+                bone.tmp_update_angle = 0.0;
+                bone.current_angle = self.bone_rest_angles[*i].1;
+            }
+
+            // Update all bones relative to their parents
+            for i in &self.child_last_indices {
+                let values = self.calculate_bone(*i);
+                self.bones[*i].set(values);
+            }
+
         }
 
     }
 
     pub fn apply_ik(&mut self, name: &'static str, target: Vec2, positive: bool) {
+
+        if self.ragdoll_active {
+            return;
+        }
 
         let (l1, l2, parent, index, origin, ca) = {
             let bone = self.get_bone(name).unwrap();
@@ -288,6 +349,45 @@ impl Skeleton {
         }
 
     }
+
+    pub fn apply_force(&mut self, name: &'static str, force: Vec2) {
+
+        let index = if let Some(bone) = self.get_bone(name) {
+            Some(bone.index())
+
+        } else {
+            None
+        };
+
+        if let Some(index) = index {
+            if let Some(particle) = self.particles.get_mut(index) {
+                particle.apply_force(force);
+            }
+        }
+
+    }
+
+
+    // Updating & Animation ---------------------------------------------------
+    fn animate(&mut self, dt: f32) {
+
+        // Reset animation rest angles
+        self.data.reset_animation_bones(&mut self.bone_rest_angles[..]);
+
+        // Apply animations to rest angles
+        self.animation.update(dt, &mut self.bone_rest_angles[..]);
+
+    }
+
+    pub fn set_animation(
+        &mut self,
+        data: &'static AnimationData,
+        speed_factor: f32,
+        blend_duration: f32
+    ) {
+        self.animation.set(data, blend_duration, speed_factor);
+    }
+
 
     // Visitor ----------------------------------------------------------------
     pub fn get_bone(&self, name: &'static str) -> Option<&Bone> {
@@ -349,6 +449,7 @@ impl Skeleton {
 
     }
 
+    /*
     pub fn visit_mut<C: FnMut(&mut Bone)>(&mut self, mut callback: C, children_first: bool) {
 
         let sequence = if children_first {
@@ -369,7 +470,6 @@ impl Skeleton {
 
     }
 
-    /*
     pub fn visit_with_parents<C: FnMut(&Bone, &Bone)>(&mut self, mut callback: C, children_first: bool) {
 
         let sequence = if children_first {
@@ -496,13 +596,11 @@ pub struct Bone {
     user_angle: f32,
 
     start: Vec2, // parent.end
-    // end: Vec2, // children[..].start
+    end: Vec2,
 
     // Note: Only updated in skeleton visit_*() methods
     world_position: Vec2,
     local_transform: Vec2,
-
-    particle: Particle,
 
     data: &'static SkeletalBone
 }
@@ -520,8 +618,7 @@ impl ParticleLike for Bone {
     }
 
     fn to_particle(&self) -> Particle {
-        //self.particle.clone()
-        Particle::with_inv_mass(self.transform(self.end_local()), 1.0)
+        Particle::with_inv_mass(self.transform(self.end_local()), (self.data.1).4)
     }
 
 }
@@ -554,15 +651,11 @@ impl Bone {
     }
 
     pub fn end_local(&self) -> Vec2 {
-        self.particle.position
+        self.end
     }
 
     pub fn end_world(&self) -> Vec2 {
         self.end_local().scale(self.local_transform) + self.world_position
-    }
-
-    pub fn to_local(&self, w: Vec2) -> Vec2 {
-        (w - self.world_position).scale(self.local_transform)
     }
 
     pub fn transform(&self, p: Vec2) -> Vec2 {
@@ -583,19 +676,6 @@ impl Bone {
     }
 
 
-    // Ragdoll ----------------------------------------------------------------
-    pub fn enable_ragdoll(&mut self, enabled: bool) {
-        if enabled {
-            // Set to ragdoll_inv_mass
-            self.particle.set_invmass((self.data.1).4);
-
-        } else {
-            // Set to ik_inv_mass
-            self.particle.set_invmass((self.data.1).3);
-        }
-    }
-
-
     // Internal ---------------------------------------------------------------
     fn set(&mut self, values: (f32, Vec2, Vec2)) {
         self.tmp_update_angle = values.0;
@@ -604,7 +684,7 @@ impl Bone {
     }
 
     fn set_end(&mut self, p: Vec2) {
-        self.particle.set_position(p);
+        self.end = p;
     }
 
 }

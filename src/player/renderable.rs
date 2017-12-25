@@ -16,7 +16,7 @@ use lean::{
     Skeleton, SkeletalData,
     AnimationData,
     Angle, Vec2,
-    StickConstraint,
+    Constraint, StickConstraint,
     ParticleSystem, ParticleTemplate,
     RigidBodyData, RigidBody
 };
@@ -182,8 +182,6 @@ pub struct PlayerRenderable {
 
     // Visual feedback
     ragdoll_timer: f32,
-    ragdoll_facing: Vec2,
-    ragdoll: Option<ParticleSystem>,
     scarf_timer: f32,
     scarf: ParticleSystem,
     weapon: RigidBody
@@ -209,8 +207,6 @@ impl PlayerRenderable {
             was_grounded: false,
 
             ragdoll_timer: 0.0,
-            ragdoll_facing: Vec2::zero(),
-            ragdoll: None,
 
             scarf_timer: 0.0,
             scarf: scarf,
@@ -219,8 +215,10 @@ impl PlayerRenderable {
     }
 
     pub fn set_state(&mut self, state: PlayerState) {
+
         self.state = state;
-        if self.state.hp == 0 && self.ragdoll.is_none() {
+
+        if self.state.hp == 0 && !self.skeleton.has_ragdoll() {
 
             let facing = Angle::facing(self.state.direction + D90).to_vec();
             let force = Vec2::new(-16.0, -31.0).scale(facing);
@@ -229,18 +227,45 @@ impl PlayerRenderable {
             self.weapon.make_dynamic();
             self.weapon.apply_dynamic_force(force * 0.5);
 
-            // Create skeleton ragdoll
-            self.ragdoll = Some(self.create_ragdoll(force));
-            self.ragdoll_timer = 0.0;
-            self.ragdoll_facing = facing;
+            // Setup additional constraints for nicer looks
+            let additional_constraint_pairs = vec![
+                // Back legs
+                (1, 9, 1.0),
+                (1, 11, 1.0),
 
-        } else if self.state.hp > 0 && self.ragdoll.is_some() {
+                // Head legs
+                (3, 9, 1.00),
+                (3, 11, 1.00),
+
+                // Hip arms
+                (8, 4, 1.00),
+                (8, 6, 1.00)
+
+            ];
+
+            let mut constraints: Vec<Box<Constraint>> = Vec::new();
+            for (a, b, s) in additional_constraint_pairs {
+                let ap = self.skeleton.get_bone_index(a).end_local();
+                let bp = self.skeleton.get_bone_index(b).end_local();
+                let d = (ap - bp).len() * s;
+                constraints.push(Box::new(StickConstraint::new(a, b, d)));
+            }
+
+            self.skeleton.start_ragdoll(constraints);
+
+            // Apply initial force
+            self.skeleton.apply_force("Root", force);
+            self.skeleton.apply_force("Head", force * 0.8);
+            self.ragdoll_timer = 0.0;
+
+        } else if self.state.hp > 0 && self.skeleton.has_ragdoll() {
             let p = self.state.position;
             self.scarf.visit_particles_mut(|_, particle| {
                 particle.set_position(p);
             });
-            self.ragdoll.take();
+            self.skeleton.stop_ragdoll();
         }
+
     }
 
     pub fn update(&mut self, dt: f32) {
@@ -294,167 +319,15 @@ impl PlayerRenderable {
 
     pub fn draw(&mut self, context: &mut Context, level: &Level) {
 
-        // Update ragdoll
-        let ragdoll_timer = self.ragdoll_timer;
-
-        // TODO merge ragdoll into skeleton
-        // TODO we'll need a closure for the time being until all configuration
-        // TODO is embedded within the skeletal data structure
-        if let Some(ref mut ragdoll) = self.ragdoll {
-
-            self.ragdoll_timer += context.dt();
-
-            let floor = self.skeleton.to_local(Vec2::new(0.0, level.floor));
-            ragdoll.step(context.dt(), Vec2::new(0.0, 240.0), |p| {
-                if p.position.y > floor.y {
-                    if ragdoll_timer > 1.0 {
-                        p.set_invmass(0.5);
-                    }
-                    p.position.y = p.position.y.min(floor.y);
-                }
-            });
-
-            self.skeleton.set_local_transform(self.ragdoll_facing);
-            self.skeleton.visit_mut(|bone| {
-                if let Some(parent) = bone.parent() {
-                    let index = bone.index();
-                    let start = bone.transform(ragdoll.get(parent).position);
-                    let end = bone.transform(ragdoll.get(bone.index()).position);
-                    bone.set_from_ragdoll(start, end);
-                }
-
-            }, false);
-
-        } else {
-            self.skeleton.set_local_transform(Angle::facing(self.state.direction + D90).to_vec());
-            self.update_skeleton(context.dt(), level);
-        };
-
-        let facing = self.skeleton.local_transform();
-
-        // Draw scarf
-        let neck = self.skeleton.get_bone_end_world("Neck");
-        self.scarf.get_mut(0).set_position(neck);
-
-        self.scarf_timer += context.dt();
-        self.scarf.activate(); // Don't let the scarf fall into rest
-        self.scarf.step(context.dt(), Vec2::new(-200.0 * facing.x, (self.scarf_timer * 4.0).sin() * 150.0), |p| {
-            p.position.y = p.position.y.min(level.floor);
-        });
-
-        self.scarf.visit_particles_chained(|_, p, n| {
-            context.line_vec(p.position, n.position, 0x00ffff00);
-        });
-
-        // Draw bones
-        self.skeleton.visit(|bone| {
-
-            let line = (
-                bone.start_world(),
-                bone.end_world()
-            );
-
-            let name = bone.name();
-            if name == "Head" {
-                context.circle_vec(line.1, 4.0, 0x00d0d0d0);
-
-            } else if name == "L.Arm" || name == "L.Hand" {
-                context.line_vec(line.0, line.1, 0x00808080);
-
-            } else if name == "L.Leg" || name == "L.Foot" {
-                context.line_vec(line.0, line.1, 0x00808080);
-
-            } else if name != "Root" {
-                context.line_vec(line.0, line.1, 0x00d0d0d0);
-            }
-
-        }, false);
-
-        // Draw Weapon
-        if self.ragdoll.is_none() {
-            let shoulder = self.skeleton.get_bone_end_world("Back");
-            self.weapon.step_static(
-                shoulder,
-                Vec2::new(-self.recoil, 0.0),
-                facing.flipped(),
-                self.state.direction
-            );
-
-            self.weapon.visit_static(|a, b| {
-                context.line_vec(
-                    a,
-                    b,
-                    0x00ffff00
-                );
-            });
-
-        } else {
-            self.weapon.step_dynamic(context.dt(), Vec2::new(0.0, 240.0), |p| {
-                if p.position.y > level.floor {
-                    if ragdoll_timer > 1.0 {
-                        p.set_invmass(0.5);
-                    }
-                    p.position.y = p.position.y.min(level.floor);
-                }
-            });
-            self.weapon.visit_dynamic(|(_, a), (_, b), _| {
-                context.line_vec(
-                    a,
-                    b,
-                    0x00ffff00
-                );
-            });
+        // Update timers
+        let dt = context.dt();
+        if self.skeleton.has_ragdoll() {
+            self.ragdoll_timer += dt;
         }
+        self.scarf_timer += dt;
 
-    }
-
-    fn create_ragdoll(&mut self, force: Vec2) -> ParticleSystem {
-
-        // Create Skeleton Ragdoll
-        let mut ragdoll = ParticleSystem::from(&self.skeleton, 2);
-
-        // Setup additional constraints for nicer looks
-        // TODO move these into skeleton data and use angular constraints
-        // instead
-        let additional_constraint_pairs = vec![
-            // Back legs
-            (1, 9, 1.0),
-            (1, 11, 1.0),
-
-            // Head legs
-            (3, 9, 1.00),
-            (3, 11, 1.00),
-
-            // Hip arms
-            (8, 4, 1.00),
-            (8, 6, 1.00)
-
-        ];
-
-        for (a, b, s) in additional_constraint_pairs {
-            let ap = self.skeleton.get_bone_index(a).end_local();
-            let bp = self.skeleton.get_bone_index(b).end_local();
-            let d = (ap - bp).len() * s;
-            ragdoll.add_constraint(StickConstraint::new(a, b, d));
-        }
-
-        // Tweak inverse masses of root, back and head
-        ragdoll.get_mut(0).set_invmass(0.97);
-        ragdoll.get_mut(1).set_invmass(0.98);
-        ragdoll.get_mut(3).set_invmass(0.99);
-
-        // Apply initial force
-        ragdoll.get_mut(0).apply_force(force);
-        ragdoll.get_mut(3).apply_force(force * 0.8);
-        ragdoll
-
-    }
-
-
-    // Internal ---------------------------------------------------------------
-    fn update_skeleton(&mut self, dt: f32, level: &Level) {
-
-        let facing = self.skeleton.local_transform();
+        let facing = Angle::facing(self.state.direction + D90).to_vec();
+        self.skeleton.set_local_transform(facing);
 
         // Aim Leanback
         let aim_horizon = self.compute_view_horizon_distance();
@@ -499,8 +372,16 @@ impl PlayerRenderable {
         );
 
         // Animate and Arrange
-        self.skeleton.animate(dt);
-        self.skeleton.arrange();
+        let floor = self.skeleton.to_local(Vec2::new(0.0, level.floor));
+        let ragdoll_timer = self.ragdoll_timer;
+        self.skeleton.step(dt, Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
+            if p.position.y > floor.y {
+                 if ragdoll_timer > 1.0 {
+                     p.set_invmass(0.5);
+                 }
+                p.position.y = p.position.y.min(floor.y);
+            }
+        });
 
         // Weapon Grip IK
         let shoulder = self.skeleton.get_bone_end_ik("Back");
@@ -525,8 +406,83 @@ impl PlayerRenderable {
 
         }
 
+        // Draw scarf
+        let neck = self.skeleton.get_bone_end_world("Neck");
+        self.scarf.get_mut(0).set_position(neck);
+
+        self.scarf.activate(); // Don't let the scarf fall into rest
+        self.scarf.step(dt, Vec2::new(-200.0 * facing.x, (self.scarf_timer * 4.0).sin() * 150.0), |p| {
+            p.position.y = p.position.y.min(level.floor);
+        });
+
+        self.scarf.visit_particles_chained(|_, p, n| {
+            context.line_vec(p.position, n.position, 0x00ffff00);
+        });
+
+        // Draw bones
+        self.skeleton.visit(|bone| {
+
+            let line = (
+                bone.start_world(),
+                bone.end_world()
+            );
+
+            let name = bone.name();
+            if name == "Head" {
+                context.circle_vec(line.1, 4.0, 0x00d0d0d0);
+
+            } else if name == "L.Arm" || name == "L.Hand" {
+                context.line_vec(line.0, line.1, 0x00808080);
+
+            } else if name == "L.Leg" || name == "L.Foot" {
+                context.line_vec(line.0, line.1, 0x00808080);
+
+            } else if name != "Root" {
+                context.line_vec(line.0, line.1, 0x00d0d0d0);
+            }
+
+        }, false);
+
+        // Draw Weapon
+        if self.skeleton.has_ragdoll() {
+            self.weapon.step_dynamic(context.dt(), Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
+                if p.position.y > level.floor {
+                    if ragdoll_timer > 1.0 {
+                        p.set_invmass(0.5);
+                    }
+                    p.position.y = p.position.y.min(level.floor);
+                }
+            });
+            self.weapon.visit_dynamic(|(_, a), (_, b), _| {
+                context.line_vec(
+                    a,
+                    b,
+                    0x00ffff00
+                );
+            });
+
+        } else {
+            let shoulder = self.skeleton.get_bone_end_world("Back");
+            self.weapon.step_static(
+                shoulder,
+                Vec2::new(-self.recoil, 0.0),
+                facing.flipped(),
+                self.state.direction
+            );
+
+            self.weapon.visit_static(|a, b| {
+                context.line_vec(
+                    a,
+                    b,
+                    0x00ffff00
+                );
+            });
+
+        }
+
     }
 
+    // Internal ---------------------------------------------------------------
     fn compute_view_horizon_distance(&self) -> f32 {
         let shoulder = self.skeleton.get_bone_end_local("Back");
         let aim = shoulder + Angle::offset(self.state.direction, self.config.line_of_sight_length);

@@ -213,6 +213,16 @@ impl Particle {
         self.position = self.position + force;
     }
 
+    pub fn at_rest(&mut self) -> bool {
+        if (self.position - self.rest_position).len().abs() > 0.1 {
+            self.rest_position = self.position;
+            false
+
+        } else {
+            true
+        }
+    }
+
     /*
     pub fn apply_constant_force(&mut self, force: Vec2) {
         self.constant_force = force;
@@ -248,6 +258,7 @@ impl ParticleSystem {
 
     }
 
+    /*
     pub fn from<T: ParticleSystemLike>(system_like: &T, iterations: usize) -> ParticleSystem {
         Self {
             particles: system_like.get_particles(),
@@ -255,15 +266,11 @@ impl ParticleSystem {
             iterations,
             activity: 10
         }
-    }
+    }*/
 
     // Getters ----------------------------------------------------------------
     pub fn active(&self) -> bool {
         self.activity > 0
-    }
-
-    pub fn get(&self, index: usize) -> &Particle {
-        &self.particles[index]
     }
 
     pub fn get_mut(&mut self, index: usize) -> &mut Particle {
@@ -280,11 +287,13 @@ impl ParticleSystem {
         self.activate();
     }
 
-    pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collision: C) {
+    pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collider: C) {
         if self.active() {
-            self.accumulate_forces(gravity);
-            self.verlet(time_step);
-            self.satisfy_constraints(collision);
+            ParticleSystem::accumulate_forces(gravity, &mut self.particles[..]);
+            ParticleSystem::verlet(time_step, &mut self.particles[..]);
+            if !ParticleSystem::satisfy_constraints(self.iterations, &mut self.particles[..], &self.constraints[..], collider) {
+                self.activity = self.activity.saturating_sub(1);
+            }
         }
     }
 
@@ -321,8 +330,8 @@ impl ParticleSystem {
     }
 
     // Internal ---------------------------------------------------------------
-    fn verlet(&mut self, time_step: f32) {
-        for p in &mut self.particles {
+    pub fn verlet(time_step: f32, particles: &mut [Particle]) {
+        for p in particles {
             let current_pos = p.position;
             let change = p.position - p.prev_position + p.acceleration * time_step * time_step;
             p.position = p.position + change * p.inv_mass;
@@ -330,42 +339,41 @@ impl ParticleSystem {
         }
     }
 
-    fn accumulate_forces(&mut self, gravity: Vec2) {
-        for p in &mut self.particles {
+    pub fn accumulate_forces(gravity: Vec2, particles: &mut [Particle]) {
+        for p in particles {
             p.acceleration = gravity + p.constant_force;
         }
     }
 
-    fn satisfy_constraints<C: Fn(&mut Particle)>(&mut self, collision: C) {
+    pub fn satisfy_constraints<C: Fn(&mut Particle)>(
+        iterations: usize,
+        particles: &mut [Particle],
+        constraints: &[Box<Constraint>],
+        collider: C
+    ) -> bool {
 
         let mut any_particle_active = false;
-        for _ in 0..self.iterations {
+        for _ in 0..iterations {
 
-            for mut p in &mut self.particles {
-
-                collision(&mut p);
-
-                // Check if the particle moved within the previous iteration
-                if (p.position - p.rest_position).len().abs() > 0.1 {
+            for mut p in particles.iter_mut() {
+                collider(&mut p);
+                if !p.at_rest() {
                     any_particle_active = true;
-                    p.rest_position = p.position;
                 }
-
             }
 
-            for c in &self.constraints {
-                c.solve(&mut self.particles[..]);
+            for c in constraints {
+                c.solve(particles);
             }
 
         }
 
-        if !any_particle_active {
-            self.activity = self.activity.saturating_sub(1);
-        }
+        any_particle_active
 
     }
 
 }
+
 
 
 // ParticleSystem Templates ----------------------------------------------------
