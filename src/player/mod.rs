@@ -12,52 +12,19 @@ use std::f32::consts::PI;
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{Angle, Vec2, f32_equals};
+use lean::{Angle, Vec2, f32_equals, StickFigureConfig, StickFigureState};
 use super::Context;
 use ::demo::Level;
 
-mod renderable;
-pub use self::renderable::PlayerRenderable;
-
-#[derive(Clone)]
-pub struct Config {
-    pub acceleration: f32,
-    pub acceleration_max: f32,
-    pub velocity_damping: f32,
-    pub velocity_backwards_factor: f32,
-    pub jump_force: f32,
-    pub fall_speed: f32,
-    pub fall_limit: f32,
-    pub offset: Vec2,
-    pub shoulder_height: f32,
-    pub line_of_sight_length: f32,
-
-    pub leanback_min: f32,
-    pub leanback_max: f32,
-    pub leanback_head_factor: f32,
-    pub recoil_leanback_factor: f32,
-    pub recoil_force: f32,
-    pub recoil_damping: f32,
-    pub idle_compression: f32,
-    pub idle_speed: f32,
-    pub land_compression: f32,
-    pub land_compression_factor: f32,
-    pub land_speed: f32,
-
-    pub run_compression: f32,
-    pub run_speed: f32,
-
-    pub crouching_factor: f32,
-    pub crouch_compression: f32,
-    pub crouch_speed: f32
-}
+//mod renderable;
+//pub use self::renderable::PlayerRenderable;
 
 #[derive(Clone)]
 pub struct PlayerState {
+    hp: u8,
     position: Vec2,
     velocity: Vec2,
     direction: f32,
-    hp: u8,
     is_crouching: bool,
     is_firing: bool,
     is_grounded: bool
@@ -77,6 +44,38 @@ impl PlayerState {
     }
 }
 
+impl StickFigureState for PlayerState {
+
+    fn is_alive(&self) -> bool {
+        self.hp > 0
+    }
+
+    fn position(&self) -> Vec2 {
+        self.position
+    }
+
+    fn velocity(&self) -> Vec2 {
+        self.velocity
+    }
+
+    fn direction(&self) -> f32 {
+        self.direction
+    }
+
+    fn is_grounded(&self) -> bool {
+        self.is_grounded
+    }
+
+    fn is_crouching(&self) -> bool {
+        self.is_crouching
+    }
+
+    fn is_firing(&self) -> bool {
+        self.is_firing
+    }
+
+}
+
 pub struct Player {
 
     // Server only
@@ -84,13 +83,13 @@ pub struct Player {
 
     // Shared with Server
     state: PlayerState,
-    config: Config
+    config: StickFigureConfig
 
 }
 
 impl Player {
 
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: StickFigureConfig) -> Self {
         Self {
             ticks_since_firing: 0,
 

@@ -12,10 +12,9 @@ use std::f32::consts::PI;
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{SkeletalData, Vec2};
+use lean::{SkeletalData, Vec2, StickFigure, StickFigureConfig};
 use super::Context;
-
-use super::player::{Player, PlayerRenderable, Config};
+use super::player::{Player, PlayerState};
 
 
 // Statics --------------------------------------------------------------------
@@ -72,7 +71,7 @@ impl Level {
 
 pub struct Demo {
     player: Player,
-    renderable: PlayerRenderable,
+    figure: StickFigure<PlayerState>,
     level: Level,
     input_direction: f32
 }
@@ -81,7 +80,7 @@ impl Demo {
 
     pub fn new(width: f32, height: f32) -> Self {
 
-        let config = Config {
+        let config = StickFigureConfig {
             acceleration: 0.70,
             acceleration_max: 3.5,
             velocity_damping: 0.7,
@@ -112,10 +111,10 @@ impl Demo {
         };
 
         let player = Player::new(config.clone());
-        let renderable = PlayerRenderable::from_skeleton(&SKELETON, player.get_state(), config);
+        let figure = StickFigure::default(player.get_state(), config);
         Self {
             player: player,
-            renderable: renderable,
+            figure: figure,
             level: Level {
                 width,
                 floor: height * 0.75
@@ -155,9 +154,9 @@ impl Demo {
     }
 
     pub fn draw(&mut self, context: &mut Context) {
-        self.renderable.set_state(self.player.get_state());
-        self.renderable.update(0.0166666);
-        self.renderable.draw(context, &self.level);
+        self.figure.set_state(self.player.get_state());
+        self.figure.update(0.0166666);
+        self.figure.draw(context, &self.level);
         self.level.draw(context);
     }
 

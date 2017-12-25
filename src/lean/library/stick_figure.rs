@@ -21,8 +21,7 @@ use lean::{
     f32_equals
 };
 
-use super::Context;
-use super::{Config, PlayerState};
+use ::Context;
 use ::demo::Level;
 
 
@@ -33,6 +32,38 @@ const D22: f32 = D45 * 0.5;
 const D12: f32 = D22 * 0.5;
 
 lazy_static! {
+
+    static ref DEFAULT_FIGURE_SKELETON: SkeletalData = SkeletalData {
+        bones: vec![
+            (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
+
+            (  "Back", ( "Root", 17.0,  0.0, 0.00, 0.99)), // 1
+            (  "Neck", ( "Back",  2.0,  0.0, 0.00, 1.00)), // 2
+            (  "Head", ( "Neck",  4.0,  0.0, 0.00, 0.99)), // 3
+
+            ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 4
+            ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 5
+            ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 6
+            ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 7
+
+            (  "Hip", ( "Root",   1.0,   PI, 0.00, 1.00)), // 8
+
+            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 1.00)), // 9
+            ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 10
+            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 1.00)), // 11
+            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 12
+        ],
+        constraints: vec![
+            ("Back", "L.Leg"),
+            ("Back", "R.Leg"),
+
+            ("Head", "L.Leg"),
+            ("Head", "R.Leg"),
+
+            ("Hip", "L.Arm"),
+            ("Hip", "R.Arm")
+        ]
+    };
 
     static ref IDLE_ANIMATION: AnimationData = AnimationData {
         name: "Idle",
@@ -163,11 +194,69 @@ lazy_static! {
 
 }
 
-pub struct PlayerRenderable {
 
-    // Shared Logic
-    config: Config,
-    state: PlayerState,
+// Traits ---------------------------------------------------------------------
+pub trait StickFigureState {
+    fn is_alive(&self) -> bool;
+    fn position(&self) -> Vec2;
+    fn velocity(&self) -> Vec2;
+    fn direction(&self) -> f32;
+    fn is_grounded(&self) -> bool;
+    fn is_crouching(&self) -> bool;
+    fn is_firing(&self) -> bool;
+}
+
+
+// Configuration --------------------------------------------------------------
+#[derive(Clone)]
+pub struct StickFigureConfig {
+
+    pub offset: Vec2,
+    pub shoulder_height: f32,
+    pub line_of_sight_length: f32,
+
+    pub acceleration: f32,
+    pub acceleration_max: f32,
+
+    pub velocity_damping: f32,
+    pub velocity_backwards_factor: f32,
+
+    pub jump_force: f32,
+    pub fall_speed: f32,
+    pub fall_limit: f32,
+
+    pub leanback_min: f32,
+    pub leanback_max: f32,
+    pub leanback_head_factor: f32,
+
+    pub recoil_leanback_factor: f32,
+    pub recoil_force: f32,
+    pub recoil_damping: f32,
+
+    pub idle_compression: f32,
+    pub idle_speed: f32,
+
+    pub land_compression: f32,
+    pub land_compression_factor: f32,
+    pub land_speed: f32,
+
+    pub run_compression: f32,
+    pub run_speed: f32,
+
+    pub crouching_factor: f32,
+    pub crouch_compression: f32,
+    pub crouch_speed: f32
+}
+
+
+
+
+// Stick Figure Abstraction ---------------------------------------------------
+pub struct StickFigure<T: StickFigureState> {
+
+    // State inputs
+    state: T,
+    config: StickFigureConfig,
 
     // Rendering Only
     skeleton: Skeleton,
@@ -188,10 +277,19 @@ pub struct PlayerRenderable {
 
 }
 
-impl PlayerRenderable {
+impl<T: StickFigureState> StickFigure<T> {
 
-    pub fn from_skeleton(data: &'static SkeletalData, state: PlayerState, config: Config) -> Self {
-        let scarf = ParticleTemplate::schal(1, 6, 4.0, state.position);
+    pub fn default(state: T, config: StickFigureConfig) -> Self {
+        StickFigure::from_skeleton(&DEFAULT_FIGURE_SKELETON, state, config)
+    }
+
+    pub fn from_skeleton(
+        data: &'static SkeletalData,
+        state: T,
+        config: StickFigureConfig
+
+    ) -> Self {
+        let scarf = ParticleTemplate::schal(1, 6, 4.0, state.position());
         Self {
             config: config,
             state: state,
@@ -214,13 +312,13 @@ impl PlayerRenderable {
         }
     }
 
-    pub fn set_state(&mut self, state: PlayerState) {
+    pub fn set_state(&mut self, state: T) {
 
         self.state = state;
 
-        if self.state.hp == 0 && !self.skeleton.has_ragdoll() {
+        if !self.state.is_alive() && !self.skeleton.has_ragdoll() {
 
-            let facing = Angle::facing(self.state.direction + D90).to_vec();
+            let facing = Angle::facing(self.state.direction() + D90).to_vec();
             let force = Vec2::new(-16.0, -31.0).scale(facing);
 
             // Update weapon model to support ragdoll
@@ -232,8 +330,8 @@ impl PlayerRenderable {
             self.skeleton.apply_local_force(Vec2::new(0.0, -10.0), force, 2.0);
             self.ragdoll_timer = 0.0;
 
-        } else if self.state.hp > 0 && self.skeleton.has_ragdoll() {
-            let p = self.state.position;
+        } else if self.state.is_alive() && self.skeleton.has_ragdoll() {
+            let p = self.state.position();
             self.scarf.visit_particles_mut(|_, particle| {
                 particle.set_position(p);
             });
@@ -244,53 +342,64 @@ impl PlayerRenderable {
 
     pub fn update(&mut self, dt: f32) {
 
-        if self.state.hp == 0 {
+        if !self.state.is_alive() {
             return;
         }
 
-        if !self.was_grounded && self.state.is_grounded {
+        let velocity = self.state.velocity();
+
+        // Compression
+        if !self.was_grounded && self.state.is_grounded() {
             self.compression_timer = 0.0;
             self.compression = self.config.land_compression;
         }
-        if self.state.is_grounded {
+
+        if self.state.is_grounded() {
             self.compression_timer += dt;
         }
 
         self.compression *= self.config.land_compression_factor;
 
-        if !self.was_firing && self.state.is_firing {
+        // Firing
+        if !self.was_firing && self.state.is_firing() {
             self.recoil = self.config.recoil_force;
 
         } else {
             self.recoil *= self.config.recoil_damping;
         }
 
-        if self.state.velocity.x == 0.0 && self.state.is_grounded && !self.state.is_crouching {
+        // Idling
+        if velocity.x == 0.0 && self.state.is_grounded() && !self.state.is_crouching() {
             self.idle_timer += dt;
 
         } else {
             self.idle_timer = 0.0;
         }
 
-        if self.state.velocity.x.abs() > 1.0 && self.state.is_grounded && !self.state.is_crouching {
+        // Running
+        if velocity.x.abs() > 1.0 && self.state.is_grounded() && !self.state.is_crouching() {
             self.run_timer += dt;
 
         } else {
             self.run_timer = 0.0;
         }
 
-        if self.state.is_grounded && self.state.is_crouching {
+        // Crouching
+        if self.state.is_grounded() && self.state.is_crouching() {
             self.crouch_timer += dt;
 
         } else {
             self.crouch_timer *= 0.9;
         }
 
-        self.was_firing = self.state.is_firing;
-        self.was_grounded = self.state.is_grounded;
+        // State change detection
+        self.was_firing = self.state.is_firing();
+        self.was_grounded = self.state.is_grounded();
 
     }
 
+    // TODO feed in collider instead of level
+    // TODO abstract context?
     pub fn draw(&mut self, context: &mut Context, level: &Level) {
 
         // Update timers
@@ -300,7 +409,11 @@ impl PlayerRenderable {
         }
         self.scarf_timer += dt;
 
-        let facing = Angle::facing(self.state.direction + D90).to_vec();
+        // Gather state data
+        let facing = Angle::facing(self.state.direction() + D90).to_vec();
+        let velocity = self.state.velocity();
+        let position = self.state.position();
+
         self.skeleton.set_local_transform(facing);
 
         // Aim Leanback
@@ -311,15 +424,15 @@ impl PlayerRenderable {
 
             ).min(self.config.leanback_max).max(self.config.leanback_min) * 0.009;;
 
-        self.skeleton.get_bone_mut("Back").unwrap().set_user_angle(leanback + self.state.velocity.x * 0.05 * facing.x);
+        self.skeleton.get_bone_mut("Back").unwrap().set_user_angle(leanback + velocity.x * 0.05 * facing.x);
         self.skeleton.get_bone_mut("Neck").unwrap().set_user_angle(leanback * self.config.leanback_head_factor);
 
         // Place and update bones
-        if !self.state.is_grounded {
-            self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * self.state.velocity.x.abs().max(1.0).min(1.125)), 0.05);
+        if !self.state.is_grounded() {
+            self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * velocity.x.abs().max(1.0).min(1.125)), 0.05);
 
-        } else if self.state.velocity.x.abs() > 0.5 {
-            if f32_equals(self.state.velocity.x.signum(), facing.x) {
+        } else if velocity.x.abs() > 0.5 {
+            if f32_equals(velocity.x.signum(), facing.x) {
                 self.skeleton.set_animation(&RUN_ANIMATION, 0.1, 0.05);
 
             } else {
@@ -342,7 +455,7 @@ impl PlayerRenderable {
         let run_offset = Vec2::new(0.0, run_offset * ((self.run_timer * self.config.run_speed).min(1.0)));
 
         self.skeleton.set_world_offset(
-            self.state.position + self.config.offset + idle_offset + crouch_offset + run_offset + compression
+            position + self.config.offset + idle_offset + crouch_offset + run_offset + compression
         );
 
         // Animate and Arrange
@@ -359,14 +472,14 @@ impl PlayerRenderable {
 
         // Weapon Grip IK
         let shoulder = self.skeleton.get_bone_end_ik("Back");
-        let grip_angle = Angle::transform(self.state.direction, facing);
+        let grip_angle = Angle::transform(self.state.direction(), facing);
         let grip = shoulder + Angle::offset(grip_angle, 17.0 - self.recoil) + Angle::offset(grip_angle + D90, 1.0);
         let trigger = shoulder + Angle::offset(grip_angle, 6.5 - self.recoil * 0.5) + Angle::offset(grip_angle + D90, 4.0);
         self.skeleton.apply_ik("L.Hand", grip, true);
         self.skeleton.apply_ik("R.Hand", trigger, true);
 
         // Leg IK
-        if self.state.is_grounded {
+        if self.state.is_grounded() {
 
             let mut foot_l = self.skeleton.get_bone_end_ik("L.Foot");
             let mut foot_r = self.skeleton.get_bone_end_ik("R.Foot");
@@ -438,7 +551,7 @@ impl PlayerRenderable {
                 shoulder,
                 Vec2::new(-self.recoil, 0.0),
                 facing.flipped(),
-                self.state.direction
+                self.state.direction()
             );
 
             self.weapon.visit_static(|a, b| {
@@ -456,7 +569,10 @@ impl PlayerRenderable {
     // Internal ---------------------------------------------------------------
     fn compute_view_horizon_distance(&self) -> f32 {
         let shoulder = self.skeleton.get_bone_end_local("Back");
-        let aim = shoulder + Angle::offset(self.state.direction, self.config.line_of_sight_length);
+        let aim = shoulder + Angle::offset(
+            self.state.direction(),
+            self.config.line_of_sight_length
+        );
         aim.y - shoulder.y
     }
 
@@ -472,5 +588,4 @@ impl PlayerRenderable {
     }
 
 }
-
 
