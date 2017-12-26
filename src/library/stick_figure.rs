@@ -65,7 +65,7 @@ lazy_static! {
 
     static ref IDLE_ANIMATION: AnimationData = AnimationData {
         name: "Idle",
-        duration: 6.25,
+        duration: 1.25 * 0.2,
         key_frames: vec![
             // Pose
             (0.0, vec![
@@ -80,7 +80,7 @@ lazy_static! {
                 ("L.Hand",  -D45 * 1.65)
             ]),
             // Matches the idle compression
-            (6.25 * 0.5, vec![
+            (1.25 * 0.5 * 0.2, vec![
                 ( "L.Leg", -D22),
                 ("L.Foot",  0.0),
                 ( "R.Leg",  D22),
@@ -90,14 +90,13 @@ lazy_static! {
                 ("R.Hand",  -D90),
                 ( "L.Arm",  -D90 * 0.75),
                 ("L.Hand",  -D45 * 1.65)
-
             ])
         ]
     };
 
     static ref JUMP_ANIMATION: AnimationData = AnimationData {
         name: "Jump",
-        duration: 2.0,
+        duration: 0.6,
         key_frames: vec![
             // 1
             (0.0, vec![
@@ -113,7 +112,7 @@ lazy_static! {
                 ("L.Hand",  D45 * 1.05)
             ]),
             // 2
-            (1.0, vec![
+            (0.3, vec![
                 ( "R.Leg", -D12 * 5.0 + -D22),
                 ("R.Foot",  D22 * 4.0),
                 ( "L.Leg", -D12 * 3.5 +  D22),
@@ -130,7 +129,7 @@ lazy_static! {
 
     static ref RUN_ANIMATION: AnimationData = AnimationData {
         name: "Run",
-        duration: 10.0,
+        duration: 1.0,
         key_frames: vec![
             // Pass
             (0.0, vec![
@@ -146,7 +145,7 @@ lazy_static! {
 
             ]),
             // Reach
-            (3.0, vec![
+            (0.3, vec![
                 ( "L.Leg",  -D45 * 0.95),
                 ("L.Foot",  D12 * 0.5),
                 ( "R.Leg",  D45),
@@ -159,8 +158,8 @@ lazy_static! {
                 ("L.Hand",  -D90 * 0.90),
 
             ]),
-            // // // Pass with Legs Swapped
-            (5.0, vec![
+            // Pass with Legs Swapped
+            (0.5, vec![
                 ( "R.Leg", -D45 * 1.15),
                 ("R.Foot",  D45 * 1.95),
                 ( "L.Leg", -D12),
@@ -172,8 +171,8 @@ lazy_static! {
                 ("L.Hand",  -D90 * 0.90),
 
             ]),
-            // // // Reach Mirrored
-            (8.0, vec![
+            // Reach Mirrored
+            (0.8, vec![
                 ( "R.Leg",  -D45 * 0.95),
                 ("R.Foot",  D12 * 0.5),
                 ( "L.Leg",  D45),
@@ -187,9 +186,9 @@ lazy_static! {
         ]
     };
 
-    static ref RUN_BACKWARDS_ANIMATION: AnimationData = AnimationData {
-        name: "RunBackwards",
-        duration: 10.0,
+    static ref WALK_BACKWARDS_ANIMATION: AnimationData = AnimationData {
+        name: "WalkBackwards",
+        duration: 0.8,
         key_frames: vec![
 
             // Pass
@@ -206,7 +205,7 @@ lazy_static! {
             ]),
 
             // Reach
-            (3.0, vec![
+            (0.24, vec![
                 ( "L.Leg", -D22 * 1.25),
                 ("L.Foot", D12),
                 ( "R.Leg", D12),
@@ -219,7 +218,7 @@ lazy_static! {
             ]),
 
             // // Pass
-            (5.0, vec![
+            (0.4, vec![
                 ( "R.Leg", -D12 * 1.25),
                 ("R.Foot", D45 * 1.5),
                 ( "L.Leg", D12 * 0.25),
@@ -232,7 +231,7 @@ lazy_static! {
             ]),
 
             // Reach
-            (8.0, vec![
+            (0.64, vec![
                 ( "R.Leg", -D22 * 1.25),
                 ("R.Foot", D12),
                 ( "L.Leg", D12),
@@ -468,18 +467,20 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
 
         // Place and update bones
         if !self.state.is_grounded() {
-            self.skeleton.set_animation(&JUMP_ANIMATION, (0.3 * velocity.x.abs().max(1.0).min(1.125)), 0.1);
+            self.skeleton.set_animation(&JUMP_ANIMATION, velocity.x.abs().max(1.0).min(1.125), 0.1);
 
         } else if velocity.x.abs() > 0.5 {
             if f32_equals(velocity.x.signum(), facing.x) {
-                self.skeleton.set_animation(&RUN_ANIMATION, 0.1, 0.1);
+                // TODO multiply with 1.0 / max_velocity.x * velocity.x
+                self.skeleton.set_animation(&RUN_ANIMATION, 1.0, 0.1);
 
             } else {
-                self.skeleton.set_animation(&RUN_BACKWARDS_ANIMATION, 0.08, 0.05);
+                // TODO multiply with 1.0 / max_velocity.x * velocity.x
+                self.skeleton.set_animation(&WALK_BACKWARDS_ANIMATION, 1.0, 0.05);
             }
 
         } else {
-            self.skeleton.set_animation(&IDLE_ANIMATION, 1.0 / self.config.idle_speed, 0.1);
+            self.skeleton.set_animation(&IDLE_ANIMATION, self.config.idle_speed, 0.1);
         }
 
         // Offsets

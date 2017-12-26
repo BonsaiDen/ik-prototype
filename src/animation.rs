@@ -63,8 +63,6 @@ impl AnimationBlender {
         self.blend = (1.0 / self.duration) * self.timer;
 
         let blend = cubic_bezier(0.0, 0.0, 1.0, 1.0, self.blend);
-        //println!("{:?}: {:?}", self.blend, blend);
-
         if let Some(ref mut previous) = self.previous {
             if 1.0 - blend > 0.0 {
                 previous.update(dt);
@@ -113,7 +111,6 @@ impl Animation {
         let key_count = self.data.key_frames.len();
         let next_offset = self.data.key_frames[(self.key_index + 1) % key_count].0 * self.scale;
 
-        // println!("{}", dt);
         self.time += dt;
 
         // Loop
