@@ -41,17 +41,18 @@ impl AnimationBlender {
         }
     }
 
-    pub fn set(&mut self, animation: &'static AnimationData, blend_duration: f32, speed_factor: f32) {
+    pub fn set(&mut self, animation: &'static AnimationData, blend_duration: f32, speed: f32) {
 
         // Ignore setting the same animation twice
-        if let Some(ref current) = self.current {
+        if let Some(ref mut current) = self.current {
             if current.name() == animation.name {
+                current.speed = speed;
                 return;
             }
         }
 
         self.previous = self.current.take();
-        self.current = Some(Animation::new(animation, speed_factor));
+        self.current = Some(Animation::new(animation, speed));
         self.timer = 0.0;
         self.duration = blend_duration;
 
@@ -84,18 +85,18 @@ impl AnimationBlender {
 pub struct Animation {
     time: f32,
     blend: f32,
-    scale: f32,
+    speed: f32,
     key_index: usize,
     data: &'static AnimationData
 }
 
 impl Animation {
 
-    pub fn new(data: &'static AnimationData, scale: f32) -> Self {
+    pub fn new(data: &'static AnimationData, speed: f32) -> Self {
         Self {
             time: 0.0,
             blend: 0.0,
-            scale: scale,
+            speed: speed,
             key_index: 0,
             data: data
         }
@@ -107,11 +108,13 @@ impl Animation {
 
     pub fn update(&mut self, dt: f32) {
 
-        let duration = self.data.duration * self.scale;
+        let duration = self.data.duration;
         let key_count = self.data.key_frames.len();
-        let next_offset = self.data.key_frames[(self.key_index + 1) % key_count].0 * self.scale;
+        let next_offset = self.data.key_frames[(self.key_index + 1) % key_count].0;
 
-        self.time += dt;
+        if self.speed > 0.0 {
+            self.time += dt * self.speed;
+        }
 
         // Loop
         if next_offset == 0.0 && self.time >= duration {
@@ -124,8 +127,8 @@ impl Animation {
         }
 
         // Fetch the newly updated offsets
-        let prev_offset = self.data.key_frames[self.key_index].0 * self.scale;
-        let next_offset = self.data.key_frames[(self.key_index + 1) % key_count].0 * self.scale;
+        let prev_offset = self.data.key_frames[self.key_index].0;
+        let next_offset = self.data.key_frames[(self.key_index + 1) % key_count].0;
 
         // blend factor between the prev and next frame
         // TODO support non-looping by not using a modulo here???

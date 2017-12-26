@@ -87,13 +87,17 @@ impl Example {
     pub fn new(width: f32, height: f32) -> Self {
 
         let config = StickFigureConfig {
+
             acceleration: 0.70,
             acceleration_max: 3.5,
+
             velocity_damping: 0.7,
             velocity_backwards_factor: 0.5,
+
             jump_force: 5.5,
             fall_speed: 0.25,
             fall_limit: 4.5,
+
             offset: Vec2::new(0.0, -25.0),
             shoulder_height: 25.0,
             line_of_sight_length: 80.0,
