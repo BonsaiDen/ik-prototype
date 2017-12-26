@@ -18,8 +18,8 @@ use ::{Skeleton, Vec2};
 mod scarf;
 pub use self::scarf::Scarf;
 
-mod standard_rifle;
-pub use self::standard_rifle::StandardRifle;
+mod weapon;
+pub use self::weapon::Weapon;
 
 mod stick_figure;
 pub use self::stick_figure::{
@@ -53,9 +53,4 @@ pub trait Accessory<R: Renderer, C: Collider>: Downcast {
 }
 
 impl_downcast!(Accessory<R, C> where R: Renderer, C: Collider);
-
-pub trait WeaponAttachment {
-    fn set_recoil(&mut self, recoil: f32);
-    fn set_aim_direction(&mut self, direction: f32);
-}
 

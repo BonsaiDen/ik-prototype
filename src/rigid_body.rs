@@ -17,12 +17,15 @@ use super::{StickConstraint, Particle, ParticleSystem, Vec2};
 
 // Types ----------------------------------------------------------------------
 type RigidLine = (Vec2, usize);
-
+type RigidPoint = (&'static str, f32, f32);
+type RigidConstraint = (&'static str, &'static str, bool);
+type RigidIK = (&'static str, f32, f32, bool);
 
 // Particle based Rigid Bodies ------------------------------------------------
 pub struct RigidBodyData {
-    pub points: Vec<(&'static str, f32, f32)>,
-    pub constraints: Vec<(&'static str, &'static str, bool)>
+    pub points: Vec<RigidPoint>,
+    pub constraints: Vec<RigidConstraint>,
+    pub iks: Vec<RigidIK>
 }
 
 pub struct RigidBody {
@@ -31,6 +34,7 @@ pub struct RigidBody {
     offset: Vec2,
     scale: Vec2,
     lines: Vec<(RigidLine, RigidLine, bool)>,
+    iks: Vec<RigidIK>,
     particles: ParticleSystem
 }
 
@@ -65,6 +69,7 @@ impl RigidBody {
             position: Vec2::zero(),
             offset: Vec2::zero(),
             scale: Vec2::new(1.0, 1.0),
+            iks: data.iks.clone(),
             lines: lines,
             particles: particles
         }
@@ -87,6 +92,20 @@ impl RigidBody {
                 );
             }
         }
+    }
+
+    pub fn iks_static(&self, offset: Vec2) -> Vec<(&'static str, Vec2, bool)> {
+        self.iks.iter().map(|&(bone, x, y, positive)| {
+            let p = Vec2::new(x, y);
+            (
+                bone,
+                // Scale one for rotation, then scale back to work with skeletons
+                // which always face to the right internally
+                (p + self.offset).scale(self.scale).rotate(self.angle).scale(self.scale.flipped()) + offset,
+                positive
+            )
+
+        }).collect()
     }
 
     // Dynamic (Particle Based) -----------------------------------------------

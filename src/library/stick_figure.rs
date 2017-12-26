@@ -20,7 +20,7 @@ use ::{
     f32_equals
 };
 
-use ::library::{Accessory, Renderer, Collider, StandardRifle, WeaponAttachment};
+use ::library::{Accessory, Renderer, Collider, Weapon};
 
 
 // Statics --------------------------------------------------------------------
@@ -550,13 +550,11 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         let head = self.skeleton.get_bone_end_world("Head");
         renderer.draw_circle(head, 4.0, 0x00d0_d0d0);
 
-        // Handle weapon recoil
+        // Special weapon handling
         let recoil = self.recoil;
-
-        // TODO figure out a way to make this work for different weapon types
-        if let Some(rifle) = self.get_accessory_mut::<StandardRifle>("Weapon") {
-            rifle.set_aim_direction(direction);
-            rifle.set_recoil(recoil);
+        if let Some(weapon) = self.get_accessory_mut::<Weapon>("Weapon") {
+            weapon.set_aim_direction(direction);
+            weapon.set_recoil(recoil);
         }
 
         // Draw attachments

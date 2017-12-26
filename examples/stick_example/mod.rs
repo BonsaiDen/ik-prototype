@@ -10,7 +10,7 @@
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
 use lean::library::{
-    Collider, StickFigure, StickFigureConfig, Scarf, StandardRifle
+    Collider, StickFigure, StickFigureConfig, Scarf, Weapon
 };
 
 use super::Context;
@@ -101,8 +101,8 @@ impl Example {
             leanback_max: 35.0,
             leanback_head_factor: 1.45,
             recoil_leanback_factor: 2.0,
-            recoil_force: 6.0,
-            recoil_damping: 0.8,
+            recoil_force: 7.0,
+            recoil_damping: 0.9,
             idle_compression: 1.25,
             idle_speed: 5.0,
             land_compression: 10.0,
@@ -118,7 +118,7 @@ impl Example {
         let player = Player::new(config.clone());
         let mut figure = StickFigure::default(player.get_state(), config);
         figure.add_accessory("Scarf", "Neck", Scarf::new(24.0, 6, 0x00ff_ff00));
-        figure.add_accessory("Weapon", "Back", StandardRifle::new(0x00ff_ff00));
+        figure.add_accessory("Weapon", "Back", Weapon::default(0x00ff_ff00));
 
         Self {
             player: player,

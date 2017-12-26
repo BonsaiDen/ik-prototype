@@ -13,13 +13,13 @@ use std::f32::consts::PI;
 
 // Internal Dependencies ------------------------------------------------------
 use ::{Angle, Vec2, Skeleton, RigidBody, RigidBodyData};
-use ::library::{Accessory, Renderer, Collider, WeaponAttachment};
+use ::library::{Accessory, Renderer, Collider};
 
 
 // Statics --------------------------------------------------------------------
 lazy_static! {
 
-    static ref WEAPON_RIGID: RigidBodyData = RigidBodyData {
+    static ref WEAPON_RIFLE_RIGID: RigidBodyData = RigidBodyData {
         points: vec![
             ("Center", 15.0, 0.0),
             ("Barrel", 30.0, 0.0),
@@ -32,14 +32,18 @@ lazy_static! {
             ("Center", "StockLow", true),
             ("StockMid", "StockLow", true),
             ("StockLow", "Barrel", false)
+        ],
+        iks: vec![
+            ("L.Hand", 17.0, 1.0, true),
+            ("R.Hand", 10.0, 6.0, true)
         ]
-
     };
 
 }
 
-// Standard Rifle Rigid Body --------------------------------------------------
-pub struct StandardRifle {
+
+// Generic Weapon Abstraction -------------------------------------------------
+pub struct Weapon {
     bone: &'static str,
     color: u32,
     has_ragdoll: bool,
@@ -50,9 +54,13 @@ pub struct StandardRifle {
     rigid: RigidBody
 }
 
-impl StandardRifle {
+impl Weapon {
 
-    pub fn new(color: u32) -> Self {
+    pub fn default(color: u32) -> Self {
+        Weapon::new(color, &WEAPON_RIFLE_RIGID)
+    }
+
+    pub fn new(color: u32, model: &'static RigidBodyData) -> Self {
         Self {
             bone: "Root",
             color: color,
@@ -61,25 +69,21 @@ impl StandardRifle {
             gravity: Vec2::zero(),
             direction: 0.0,
             recoil: 0.0,
-            rigid: RigidBody::new(&WEAPON_RIGID)
+            rigid: RigidBody::new(model)
         }
     }
 
-}
-
-impl WeaponAttachment for StandardRifle {
-
-    fn set_recoil(&mut self, recoil: f32) {
+    pub fn set_recoil(&mut self, recoil: f32) {
         self.recoil = recoil;
     }
 
-    fn set_aim_direction(&mut self, direction: f32) {
+    pub fn set_aim_direction(&mut self, direction: f32) {
         self.direction = direction;
     }
 
 }
 
-impl<R: Renderer, C: Collider> Accessory<R, C> for StandardRifle {
+impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
 
     fn set_bone(&mut self, bone: &'static str) {
         self.bone = bone;
@@ -112,16 +116,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for StandardRifle {
 
         } else {
             let shoulder = skeleton.get_bone_end_ik(self.bone);
-            let facing = Angle::facing(self.direction + PI * 0.5).to_vec();
-
-            let grip_angle = Angle::transform(self.direction, facing);
-            let grip = shoulder + Angle::offset(grip_angle, 17.0 - self.recoil) + Angle::offset(grip_angle + PI * 0.5, 1.0);
-            let trigger = shoulder + Angle::offset(grip_angle, 6.5 - self.recoil * 0.5) + Angle::offset(grip_angle + PI * 0.5, 4.0);
-
-            Some(vec![
-                ("L.Hand", grip, true),
-                ("R.Hand", trigger, true)
-            ])
+            Some(self.rigid.iks_static(shoulder))
         }
     }
 
