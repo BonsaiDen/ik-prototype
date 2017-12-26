@@ -15,16 +15,20 @@ use std::collections::HashMap;
 // Internal Dependencies ------------------------------------------------------
 use super::{Angle, Vec2};
 use super::animation::{AnimationFrameBone, AnimationData, AnimationBlender};
-use super::{Constraint, StickConstraint, Particle, ParticleLike, ParticleSystemLike, ParticleSystem};
+use super::{Constraint, AngularConstraint, StickConstraint, Particle, ParticleLike, ParticleSystemLike, ParticleSystem};
 
 
 // Types ----------------------------------------------------------------------
+pub enum SkeletalConstraint {
+    Stick(&'static str, &'static str),
+    Angular(&'static str, &'static str, &'static str, Option<f32>, Option<f32>)
+}
+
 type SkeletalBoneDescription = (
     // Parent, length, angle, ik_inv_mass, ragdoll_inv_mass
     &'static str, f32, f32, f32, f32
 );
 type SkeletalBone = (&'static str, SkeletalBoneDescription);
-type SkeletalConstraint = (&'static str, &'static str);
 
 
 // Skeleton Data Abstraction --------------------------------------------------
@@ -220,14 +224,26 @@ impl Skeleton {
         self.constraints = self.get_constraints();
 
         // Additional skeletal constraints
-        for &(a, b) in &self.data.constraints {
-            let a = self.get_bone(a).unwrap().index();
-            let b = self.get_bone(b).unwrap().index();
-            let ap = self.get_bone_index(a).end_local();
-            let bp = self.get_bone_index(b).end_local();
-            self.constraints.push(
-                Box::new(StickConstraint::new(a, b, (ap - bp).len()))
-            );
+        for constraint in &self.data.constraints {
+            match *constraint {
+                SkeletalConstraint::Stick(parent, child) => {
+                    let parent = self.get_bone(parent).unwrap().index();
+                    let child = self.get_bone(child).unwrap().index();
+                    let ap = self.get_bone_index(parent).end_local();
+                    let bp = self.get_bone_index(child).end_local();
+                    self.constraints.push(
+                        Box::new(StickConstraint::new(parent, child, (ap - bp).len()))
+                    );
+                },
+                SkeletalConstraint::Angular(parent, joint, child, min, max) => {
+                    let parent = self.get_bone(parent).unwrap().index();
+                    let joint = self.get_bone(joint).unwrap().index();
+                    let child = self.get_bone(child).unwrap().index();
+                    self.constraints.push(
+                        Box::new(AngularConstraint::new(parent, joint, child, min, max))
+                    );
+                }
+            }
         }
 
         self.ragdoll_steps_until_rest = 10;
@@ -401,23 +417,26 @@ impl Skeleton {
 
         // Strength
         let strength = force.len();
+        if strength > 0.0 {
 
-        // Direction of the force
-        let dir = force.unit();
+            // Direction of the force
+            let dir = force.unit();
 
-        // Calculate force for each bone
-        let forces: Vec<(&'static str, Vec2)> = self.bones.iter().map(|bone| {
+            // Calculate force for each bone
+            let forces: Vec<(&'static str, Vec2)> = self.bones.iter().map(|bone| {
 
-            // Distance from bone to origin
-            let d = 1.0 / ((bone.end_local() - origin).len() / width.max(1.0)).max(1.0);
+                // Distance from bone to origin
+                let d = 1.0 / ((bone.end_local() - origin).len() / width.max(1.0)).max(1.0);
 
-            // Force applied to this bone
-            (bone.name(), dir * strength * d)
+                // Force applied to this bone
+                (bone.name(), dir * strength * d)
 
-        }).collect();
+            }).collect();
 
-        for (name, force) in forces {
-            self.apply_force_to_bone(name, force);
+            for (name, force) in forces {
+                self.apply_force_to_bone(name, force);
+            }
+
         }
 
     }

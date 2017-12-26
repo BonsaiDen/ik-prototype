@@ -39,7 +39,7 @@ fn main() {
     let height = (480.0 * scale) as usize;
 
     let mut window = Window::new(
-        "IK Prototype - ESC to exit",
+        "IK Prototype - C to exit",
         width,
         height,
         WindowOptions {

@@ -97,7 +97,6 @@ impl Constraint for StickConstraint {
 
 }
 
-
 pub struct AngularConstraint {
     a: usize,
     b: usize,
@@ -152,24 +151,26 @@ impl Constraint for AngularConstraint {
 
         let mut limited = false;
         let mut limit = 0.0;
-        let min = self.min.unwrap_or(0.0);
-        let max = self.max.unwrap_or(0.0);
+        let min = self.min.unwrap_or(0.0) + pa;
+        let max = self.max.unwrap_or(0.0) + pa;
 
         // Check for limits
-        if self.min.is_some() && da < min + pa {
+        let delta = if self.min.is_some() && da < min {
             limited = true;
-            limit = min + pa;
+            limit = min;
+            min - da
 
-        } else if self.max.is_some() && da > max + pa {
+        } else if self.max.is_some() && da > max {
             limited = true;
-            limit = max + pa
-        }
+            limit = max;
+            da - max
+
+        } else {
+            0.0
+        };
 
         // Apply correction
         if limited {
-
-            // TODO this smooths things out, but why?
-            let limit = (limit + da) * 0.5;
 
             // Relative target vector
             let l = bot.len();
@@ -182,9 +183,9 @@ impl Constraint for AngularConstraint {
             let i3 = particles[self.c].inv_mass;
 
             // Absolute target location of child
-            let diff = (p3 - (p2 + target)) * 0.5 * (i2 + i3);
-            particles[self.b].position = p2 + diff * i2;
-            particles[self.c].position = p3 - diff * i3;
+            // let diff = (p3 - (p2 + target)) * 0.5 * (i2 + i3) * delta.min(0.1);
+            // particles[self.b].position = p2 + diff * i2;
+            // particles[self.c].position = p3 - diff * i3;
 
         }
 

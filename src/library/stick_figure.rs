@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 // Internal Dependencies ------------------------------------------------------
 use ::{
-    Skeleton, SkeletalData,
+    Skeleton, SkeletalData, SkeletalConstraint,
     AnimationData,
     Angle, Vec2,
     f32_equals
@@ -33,11 +33,10 @@ lazy_static! {
 
     static ref DEFAULT_FIGURE_SKELETON: SkeletalData = SkeletalData {
         bones: vec![
-            (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
+            (  "Root", ( "Root",  1.0, -D90, 0.00, 0.98)), // 0
 
-            (  "Back", ( "Root", 17.0,  0.0, 0.00, 0.99)), // 1
-            (  "Neck", ( "Back",  2.0,  0.0, 0.00, 1.00)), // 2
-            (  "Head", ( "Neck",  8.0,  0.0, 0.00, 0.99)), // 3
+            (  "Back", ( "Root", 16.0,  0.0, 0.00, 0.99)), // 1
+            (  "Head", ( "Back", 10.0,  0.0, 0.00, 0.99)), // 3
 
             ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 6
             ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 7
@@ -46,21 +45,40 @@ lazy_static! {
 
             (  "Hip", ( "Root",   1.0,   PI, 0.00, 1.00)), // 8
 
-            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 1.00)), // 9
+            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 9
             ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 10
-            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 1.00)), // 11
+            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 11
             ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 12
         ],
         constraints: vec![
-            ("Back", "L.Leg"),
-            ("Back", "R.Leg"),
+            SkeletalConstraint::Stick("Back", "L.Leg"),
+            SkeletalConstraint::Stick("Back", "R.Leg"),
+            SkeletalConstraint::Stick("Head", "L.Leg"),
+            SkeletalConstraint::Stick("Head", "R.Leg"),
+            SkeletalConstraint::Stick( "Hip", "L.Arm"),
+            SkeletalConstraint::Stick( "Hip", "R.Arm"),
 
-            ("Head", "L.Leg"),
-            ("Head", "R.Leg"),
+            // TODO Fix issues with angular constraints, target angle is calculated incorrectly
 
-            ("Hip", "L.Arm"),
-            ("Hip", "R.Arm")
+            // Root -> Back
+            // negative offset causes problems
+            //SkeletalConstraint::Angular("Back", "Root", "Hip", Some(-D12), Some(D12)),
+            //SkeletalConstraint::Angular("Hip", "Root", "Back", Some(-D22), Some(D45)),
+
+            // Back -> Head
+            //SkeletalConstraint::Angular("Root", "Back", "Head", Some(-D45), Some(D45)),
+
+            // // Root -> Hip
+
+            // // L.Leg -> L.Foot
+            //SkeletalConstraint::Angular("Hip", "L.Leg", "L.Foot", Some(0.0), Some(D90)),
+
+            // // R.Leg -> R.Foot
+            //SkeletalConstraint::Angular("Hip", "R.Leg", "R.Foot", Some(0.0), Some(D90))
+
         ]
+
+
     };
 
     static ref IDLE_ANIMATION: AnimationData = AnimationData {
@@ -424,7 +442,9 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         if !self.state.is_alive() && !self.skeleton.has_ragdoll() {
 
             let facing = Angle::facing(self.state.direction() + D90).to_vec();
-            let force = Vec2::new(-16.0, -31.0).scale(facing);
+
+            // TODO make external
+            let force = Vec2::new(-16.0, -31.0).scale(facing) + self.state.velocity();
 
             // Update weapon model to support ragdoll
             for accessory in self.accessories.values_mut() {
@@ -477,7 +497,7 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         ).min(self.config.leanback_max).max(self.config.leanback_min) * 0.009;;
 
         self.skeleton.get_bone_mut("Back").unwrap().set_user_angle(leanback + velocity.x * 0.05 * facing.x);
-        self.skeleton.get_bone_mut("Neck").unwrap().set_user_angle(leanback * self.config.leanback_head_factor);
+        self.skeleton.get_bone_mut("Head").unwrap().set_user_angle(leanback * self.config.leanback_head_factor);
 
         // Update Animations
         let run_factor = (1.0 / 3.5 * velocity.x).abs();
@@ -494,7 +514,7 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
             }
 
         } else {
-            self.skeleton.set_animation(&IDLE_ANIMATION, self.config.idle_speed, 0.1);
+            self.skeleton.set_animation(&IDLE_ANIMATION, 1.25 / self.config.idle_speed, 0.1);
         }
 
         // Offsets

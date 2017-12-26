@@ -33,5 +33,5 @@ mod rigid_body;
 pub use self::rigid_body::{RigidBodyData, RigidBody};
 
 mod skeleton;
-pub use self::skeleton::{SkeletalData, Skeleton};
+pub use self::skeleton::{SkeletalData, SkeletalConstraint, Skeleton};
 

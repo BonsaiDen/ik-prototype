@@ -129,7 +129,7 @@ impl Example {
 
         let player = Player::new(config.clone());
         let mut figure = StickFigure::default(player.get_state(), config);
-        figure.add_accessory("Scarf", "Neck", Scarf::new(24.0, 6, 0x00ff_ff00));
+        figure.add_accessory("Scarf", "Back", Scarf::new(24.0, 6, 0x00ff_ff00));
         figure.add_accessory("Weapon", "Back", Weapon::default(0x00ff_ff00));
 
         Self {
