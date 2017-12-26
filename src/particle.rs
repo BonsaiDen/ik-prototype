@@ -237,6 +237,7 @@ pub struct ParticleSystem {
     particles: Vec<Particle>,
     constraints: Vec<Box<Constraint>>,
     iterations: usize,
+    bounds: (Vec2, Vec2),
     activity: usize
 }
 
@@ -252,6 +253,7 @@ impl ParticleSystem {
         Self {
             particles: particles,
             constraints: Vec::new(),
+            bounds: (Vec2::zero(), Vec2::zero()),
             iterations,
             activity: 10
         }
@@ -287,13 +289,26 @@ impl ParticleSystem {
         self.activate();
     }
 
+    pub fn bounds(&self) -> (Vec2, Vec2) {
+        self.bounds
+    }
+
     pub fn step<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collider: C) {
         if self.active() {
+
             ParticleSystem::accumulate_forces(gravity, &mut self.particles[..]);
             ParticleSystem::verlet(time_step, &mut self.particles[..]);
-            if !ParticleSystem::satisfy_constraints(self.iterations, &mut self.particles[..], &self.constraints[..], collider) {
+
+            if !ParticleSystem::satisfy_constraints(
+                self.iterations,
+                &mut self.particles[..],
+                &self.constraints[..],
+                &mut self.bounds,
+                collider
+            ) {
                 self.activity = self.activity.saturating_sub(1);
             }
+
         }
     }
 
@@ -349,17 +364,29 @@ impl ParticleSystem {
         iterations: usize,
         particles: &mut [Particle],
         constraints: &[Box<Constraint>],
+        bounds: &mut (Vec2, Vec2),
         collider: C
+
     ) -> bool {
 
         let mut any_particle_active = false;
         for _ in 0..iterations {
+
+            // reset bounds
+            bounds.0.x = 10000.0;
+            bounds.0.y = 10000.0;
+            bounds.1.x = -10000.0;
+            bounds.1.y = -10000.0;
 
             for mut p in particles.iter_mut() {
                 collider(&mut p);
                 if !p.at_rest() {
                     any_particle_active = true;
                 }
+                bounds.0.x = bounds.0.x.min(p.position.x);
+                bounds.0.y = bounds.0.y.min(p.position.y);
+                bounds.1.x = bounds.1.x.max(p.position.x);
+                bounds.1.y = bounds.1.y.max(p.position.y);
             }
 
             for c in constraints {

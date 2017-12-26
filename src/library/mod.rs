@@ -32,6 +32,7 @@ pub trait Renderer {
     fn dt(&self) -> f32;
     fn draw_line(&mut self, start: Vec2, end: Vec2, color: u32);
     fn draw_circle(&mut self, c: Vec2, r: f32, color: u32);
+    fn draw_rect(&mut self, tr: Vec2, bl: Vec2, color: u32);
 }
 
 pub trait Collider {

@@ -133,6 +133,7 @@ pub struct Skeleton {
     // Particles
     particles: Vec<Particle>,
     constraints: Vec<Box<Constraint>>,
+    bounds: (Vec2, Vec2),
 
     // Animation offsets, with rest angles as defaults
     bone_rest_angles: Vec<AnimationFrameBone>,
@@ -188,6 +189,7 @@ impl Skeleton {
             // Particles
             particles: Vec::new(),
             constraints: Vec::new(),
+            bounds: (Vec2::zero(), Vec2::zero()),
 
             // Animations
             bone_rest_angles: data.to_animation_bones(),
@@ -203,6 +205,10 @@ impl Skeleton {
 
 
     // Ragdolls ---------------------------------------------------------------
+    pub fn at_rest(&self) -> bool {
+        self.ragdoll_active && self.ragdoll_steps_until_rest == 0
+    }
+
     pub fn has_ragdoll(&self) -> bool {
         self.ragdoll_active
     }
@@ -264,6 +270,28 @@ impl Skeleton {
         p + self.world_position
     }
 
+    pub fn local_bounds(&self) -> (Vec2, Vec2) {
+        if self.ragdoll_active {
+            (
+                self.bounds.0,
+                self.bounds.1
+            )
+
+        } else {
+            (
+                self.bounds.0.scale(self.local_transform),
+                self.bounds.1.scale(self.local_transform)
+            )
+        }
+    }
+
+    pub fn world_bounds(&self) -> (Vec2, Vec2) {
+        let bounds = self.local_bounds();
+        (
+            bounds.0 + self.world_position,
+            bounds.1 + self.world_position
+        )
+    }
 
     // Updating ---------------------------------------------------------------
     pub fn step<C: Fn(&mut Particle)>(&mut self, dt: f32, gravity: Vec2, collider: C) {
@@ -274,7 +302,13 @@ impl Skeleton {
 
                 ParticleSystem::accumulate_forces(gravity, &mut self.particles[..]);
                 ParticleSystem::verlet(dt, &mut self.particles[..]);
-                if !ParticleSystem::satisfy_constraints(3, &mut self.particles[..], &self.constraints[..], collider) {
+                if !ParticleSystem::satisfy_constraints(
+                    3,
+                    &mut self.particles[..],
+                    &self.constraints[..],
+                    &mut self.bounds,
+                    collider
+                ) {
                     self.ragdoll_steps_until_rest = self.ragdoll_steps_until_rest.saturating_sub(1);
                 }
 
@@ -288,10 +322,15 @@ impl Skeleton {
                     }
                 }
 
-
             }
 
         } else {
+
+            // Reset bounds
+            self.bounds.0.x = 10000.0;
+            self.bounds.0.y = 10000.0;
+            self.bounds.1.x = -10000.0;
+            self.bounds.1.y = -10000.0;
 
             // Forward animations and calculate animation bone angles
             self.animate(dt);
@@ -440,9 +479,26 @@ impl Skeleton {
         self.get_bone_end_ik(name).scale(self.local_transform)
     }
 
+    pub fn get_bone_start_world(&self, name: &'static str) -> Vec2 {
+        self.to_world(self.get_bone_start_local(name))
+    }
+
+    pub fn get_bone_start_local(&self, name: &'static str) -> Vec2 {
+        self.get_bone_start_ik(name).scale(self.local_transform)
+    }
+
     pub fn get_bone_end_ik(&self, name: &'static str) -> Vec2 {
         if let Some(bone) = self.get_bone(name) {
             bone.end_local()
+
+        } else {
+            self.world_position
+        }
+    }
+
+    pub fn get_bone_start_ik(&self, name: &'static str) -> Vec2 {
+        if let Some(bone) = self.get_bone(name) {
+            bone.start_local()
 
         } else {
             self.world_position
@@ -476,6 +532,14 @@ impl Skeleton {
                 let b = &mut self.bones[*i];
                 b.world_position = self.world_position;
                 b.local_transform = self.local_transform;
+
+                if !self.ragdoll_active {
+                    self.bounds.0.x = self.bounds.0.x.min(b.start.x).min(b.end.x);
+                    self.bounds.0.y = self.bounds.0.y.min(b.start.y).min(b.end.y);
+                    self.bounds.1.x = self.bounds.1.x.max(b.start.x).max(b.end.x);
+                    self.bounds.1.y = self.bounds.1.y.max(b.start.y).max(b.end.y);
+                }
+
             }
             callback(&self.bones[*i]);
         }

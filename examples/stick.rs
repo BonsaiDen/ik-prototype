@@ -19,7 +19,7 @@ use std::time::{self, Duration, Instant};
 
 
 // External Dependencies ------------------------------------------------------
-use minifb::{Key, WindowOptions, Window, Scale, MouseMode, MouseButton};
+use minifb::{Key, KeyRepeat, WindowOptions, Window, Scale, MouseMode, MouseButton};
 use line_drawing::{BresenhamCircle, Midpoint};
 use lean::Vec2;
 use lean::library::Renderer;
@@ -86,7 +86,8 @@ fn main() {
             window.get_mouse_down(MouseButton::Right),
             window.is_key_down(Key::Enter),
             window.is_key_down(Key::R),
-            window.is_key_down(Key::P)
+            window.is_key_down(Key::P),
+            window.is_key_pressed(Key::B, KeyRepeat::No)
         );
 
         let t = precise_time_ms();
@@ -185,7 +186,27 @@ impl Renderer for Context {
     fn draw_line(&mut self, start: Vec2, end: Vec2, color: u32) {
         self.line(start.x, start.y, end.x, end.y, color);
     }
+
+    fn draw_rect(&mut self, tr: Vec2, bl: Vec2, color: u32) {
+
+        let size = bl - tr;
+
+        // Top
+        self.line(tr.x, tr.y, tr.x + size.x, tr.y, color);
+
+        // Bottom
+        self.line(bl.x - size.x, bl.y, bl.x, bl.y, color);
+
+        // Right
+        self.line(tr.x, tr.y, tr.x, tr.y + size.y, color);
+
+        // Left
+        self.line(bl.x, bl.y - size.y, bl.x, bl.y, color);
+
+    }
+
 }
+
 
 fn precise_time_ms() -> u64 {
 

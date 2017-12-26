@@ -37,7 +37,7 @@ lazy_static! {
 
             (  "Back", ( "Root", 17.0,  0.0, 0.00, 0.99)), // 1
             (  "Neck", ( "Back",  2.0,  0.0, 0.00, 1.00)), // 2
-            (  "Head", ( "Neck",  4.0,  0.0, 0.00, 0.99)), // 3
+            (  "Head", ( "Neck",  8.0,  0.0, 0.00, 0.99)), // 3
 
             ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 6
             ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 7
@@ -363,6 +363,8 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         }
     }
 
+
+    // Accessories ------------------------------------------------------------
     pub fn add_accessory<A: Accessory<R, C> + 'static>(
         &mut self,
         name: &'static str,
@@ -399,10 +401,22 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         }
     }
 
+
+    // Getters ----------------------------------------------------------------
+    pub fn at_rest(&self) -> bool {
+        self.skeleton.at_rest()
+    }
+
+    pub fn world_bounds(&self) -> (Vec2, Vec2) {
+        self.skeleton.world_bounds()
+    }
+
     pub fn world_offset(&self) -> Vec2 {
         self.skeleton.world_offset()
     }
 
+
+    // Setters ----------------------------------------------------------------
     pub fn set_state(&mut self, state: T) {
 
         self.state = state;
@@ -548,8 +562,10 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         }, true);
 
         // Draw Head
-        let head = self.skeleton.get_bone_end_world("Head");
-        renderer.draw_circle(head, 4.0, 0x00d0_d0d0);
+        let head_end = self.skeleton.get_bone_end_world("Head");
+        let head_start = self.skeleton.get_bone_start_world("Head");
+        let head_offset = (head_end - head_start) * 0.5;
+        renderer.draw_circle(head_start + head_offset, 4.0, 0x00d0_d0d0);
 
         // Special weapon handling
         let recoil = self.recoil;

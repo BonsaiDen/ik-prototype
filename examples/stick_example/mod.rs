@@ -10,7 +10,7 @@
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
 use lean::library::{
-    Collider, StickFigure, StickFigureConfig, Scarf, Weapon
+    Collider, StickFigure, StickFigureConfig, Scarf, Weapon, Renderer
 };
 
 use super::Context;
@@ -78,6 +78,7 @@ pub struct Example {
     player: Player,
     figure: StickFigure<PlayerState, Context, LevelCollider>,
     level: Level,
+    show_bounds: bool,
     input_direction: f32
 }
 
@@ -134,6 +135,7 @@ impl Example {
                 width,
                 floor: height * 0.75
             },
+            show_bounds: false,
             input_direction: 0.0
         }
 
@@ -150,7 +152,8 @@ impl Example {
         kill: bool,
         reset: bool,
         release: bool,
-        pickup: bool
+        pickup: bool,
+        bounds: bool
     ) {
 
         if let Some((x, y)) = mouse_pos {
@@ -172,6 +175,10 @@ impl Example {
             self.figure.attach("Weapon");
         }
 
+        if bounds {
+            self.show_bounds = !self.show_bounds;
+        }
+
         self.player.update_server(fire);
         self.player.update_shared(left, right, crouch, jump, self.input_direction, &self.level);
 
@@ -181,9 +188,15 @@ impl Example {
 
         self.figure.set_state(self.player.get_state());
 
+
         let collider = LevelCollider::from_level(&self.level, self.figure.world_offset());
         self.figure.draw(context, &collider);
         self.level.draw(context);
+
+        if self.show_bounds {
+            let b = self.figure.world_bounds();
+            context.draw_rect(b.0, b.1, if self.figure.at_rest() { 0x0000_c0f0 } else { 0x00ff_0000 });
+        }
 
     }
 
