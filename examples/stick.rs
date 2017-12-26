@@ -8,12 +8,9 @@
 
 
 // Crates ---------------------------------------------------------------------
-#[macro_use]
-extern crate lazy_static;
+extern crate lean;
 extern crate line_drawing;
 extern crate minifb;
-#[macro_use]
-extern crate downcast_rs;
 
 
 // STD Dependencies -----------------------------------------------------------
@@ -24,6 +21,8 @@ use std::time::{self, Duration, Instant};
 // External Dependencies ------------------------------------------------------
 use minifb::{Key, WindowOptions, Window, Scale, MouseMode, MouseButton};
 use line_drawing::{BresenhamCircle, Midpoint};
+use lean::Vec2;
+use lean::library::Renderer;
 
 
 // Statics --------------------------------------------------------------------
@@ -32,14 +31,8 @@ const HEIGHT: usize = 240;
 
 
 // Modules --------------------------------------------------------------------
-mod lean;
-use self::lean::Vec2;
-use self::lean::library::Renderer;
-
-mod player;
-
-mod demo;
-use self::demo::Demo;
+mod stick_example;
+use self::stick_example::Example;
 
 
 // Main -----------------------------------------------------------------------
@@ -69,7 +62,7 @@ fn main() {
     let mut accumulated_wait = Duration::from_millis(0);
     let mut last_frame = precise_time_ms();
 
-    let mut demo = Demo::new(WIDTH as f32 * 2.0, HEIGHT as f32 * 2.0);
+    let mut example = Example::new(WIDTH as f32 * 2.0, HEIGHT as f32 * 2.0);
     while window.is_open() && !window.is_key_down(Key::C) {
 
         for i in &mut context.buffer {
@@ -83,7 +76,7 @@ fn main() {
             None
         };
 
-        demo.update(
+        example.update(
             mouse_pos,
             window.is_key_down(Key::A),
             window.is_key_down(Key::D),
@@ -100,7 +93,7 @@ fn main() {
         let d = (t - last_frame) as f32 / 1000.0;
         last_frame = t;
         context.dt = d as f32;
-        demo.draw(&mut context);
+        example.draw(&mut context);
 
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
         window.update_with_buffer(&context.buffer).unwrap();
@@ -204,4 +197,5 @@ fn precise_time_ms() -> u64 {
     dur.as_secs() * 1000 + u64::from(dur.subsec_nanos() / 1_000_000)
 
 }
+
 

@@ -12,8 +12,8 @@ use std::f32::consts::PI;
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{Angle, Vec2, Skeleton, RigidBody, RigidBodyData};
-use lean::library::{Accessory, Renderer, Collider, WeaponAttachment};
+use ::{Angle, Vec2, Skeleton, RigidBody, RigidBodyData};
+use ::library::{Accessory, Renderer, Collider, WeaponAttachment};
 
 
 // Statics --------------------------------------------------------------------
@@ -166,7 +166,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for StandardRifle {
                 renderer.draw_line(
                     a,
                     b,
-                    0x00ff_ff00
+                    self.color
                 );
             });
 
@@ -175,7 +175,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for StandardRifle {
                 renderer.draw_line(
                     a,
                     b,
-                    0x00ff_ff00
+                    self.color
                 );
             });
         }

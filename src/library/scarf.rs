@@ -8,8 +8,8 @@
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{Vec2, ParticleSystem, ParticleTemplate, Skeleton};
-use lean::library::{Accessory, Renderer, Collider};
+use ::{Vec2, ParticleSystem, ParticleTemplate, Skeleton};
+use ::library::{Accessory, Renderer, Collider};
 
 
 // A Scarf --------------------------------------------------------------------

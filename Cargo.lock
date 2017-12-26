@@ -38,16 +38,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ik"
-version = "0.1.0"
-dependencies = [
- "downcast-rs 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
- "line_drawing 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "minifb 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "kernel32-sys"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -69,6 +59,16 @@ dependencies = [
 name = "lazy_static"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "lean"
+version = "0.1.0"
+dependencies = [
+ "downcast-rs 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "line_drawing 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "minifb 0.10.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "libc"

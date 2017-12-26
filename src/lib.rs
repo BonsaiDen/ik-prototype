@@ -7,6 +7,13 @@
 // except according to those terms.
 
 
+// Crates ---------------------------------------------------------------------
+#[macro_use]
+extern crate lazy_static;
+#[macro_use]
+extern crate downcast_rs;
+
+
 // Exports --------------------------------------------------------------------
 mod util;
 pub use self::util::*;

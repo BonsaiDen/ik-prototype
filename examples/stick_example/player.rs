@@ -14,9 +14,9 @@ use std::f32::consts::PI;
 // Internal Dependencies ------------------------------------------------------
 use lean::{Angle, Vec2, f32_equals};
 use lean::library::{StickFigureConfig, StickFigureState};
-use ::demo::Level;
+use super::Level;
 
-
+// Payer Logic ----------------------------------------------------------------
 #[derive(Clone)]
 pub struct PlayerState {
     hp: u8,

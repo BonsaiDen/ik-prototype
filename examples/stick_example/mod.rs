@@ -10,14 +10,18 @@
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
 use lean::library::{
-    Accessory, Collider, StickFigure, StickFigureConfig, Scarf, StandardRifle
+    Collider, StickFigure, StickFigureConfig, Scarf, StandardRifle
 };
 
 use super::Context;
-use super::player::{Player, PlayerState};
 
 
-// Demo Code ------------------------------------------------------------------
+// Modules --------------------------------------------------------------------
+mod player;
+use self::player::{Player, PlayerState};
+
+
+// Example Code ---------------------------------------------------------------
 pub struct Level {
     pub width: f32,
     pub floor: f32
@@ -70,14 +74,14 @@ impl Collider for LevelCollider {
 
 }
 
-pub struct Demo {
+pub struct Example {
     player: Player,
     figure: StickFigure<PlayerState, Context, LevelCollider>,
     level: Level,
     input_direction: f32
 }
 
-impl Demo {
+impl Example {
 
     pub fn new(width: f32, height: f32) -> Self {
 

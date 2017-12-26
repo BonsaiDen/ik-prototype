@@ -11,7 +11,7 @@ use downcast_rs::Downcast;
 
 
 // Internal Dependencies ------------------------------------------------------
-use ::lean::{Skeleton, Vec2};
+use ::{Skeleton, Vec2};
 
 
 // Modules --------------------------------------------------------------------

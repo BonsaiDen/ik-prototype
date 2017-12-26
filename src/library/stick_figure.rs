@@ -8,20 +8,19 @@
 
 
 // STD Dependencies -----------------------------------------------------------
-use std::any::Any;
 use std::f32::consts::PI;
 use std::collections::HashMap;
 
 
 // Internal Dependencies ------------------------------------------------------
-use lean::{
+use ::{
     Skeleton, SkeletalData,
     AnimationData,
     Angle, Vec2,
     f32_equals
 };
 
-use lean::library::{Accessory, Renderer, Collider, StandardRifle, WeaponAttachment};
+use ::library::{Accessory, Renderer, Collider, StandardRifle, WeaponAttachment};
 
 
 // Statics --------------------------------------------------------------------
