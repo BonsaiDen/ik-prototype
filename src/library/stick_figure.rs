@@ -465,18 +465,18 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         self.skeleton.get_bone_mut("Back").unwrap().set_user_angle(leanback + velocity.x * 0.05 * facing.x);
         self.skeleton.get_bone_mut("Neck").unwrap().set_user_angle(leanback * self.config.leanback_head_factor);
 
-        // Place and update bones
+        // Update Animations
+        let run_factor = 1.0 / 3.5 * self.config.acceleration_max;
+        let walk_backwards_factor = 1.0 / 0.5 * self.config.velocity_backwards_factor;
         if !self.state.is_grounded() {
             self.skeleton.set_animation(&JUMP_ANIMATION, velocity.x.abs().max(1.0).min(1.125), 0.1);
 
         } else if velocity.x.abs() > 0.5 {
             if f32_equals(velocity.x.signum(), facing.x) {
-                // TODO multiply with 1.0 / max_velocity.x * velocity.x
-                self.skeleton.set_animation(&RUN_ANIMATION, 1.0, 0.1);
+                self.skeleton.set_animation(&RUN_ANIMATION, run_factor, 0.1);
 
             } else {
-                // TODO multiply with 1.0 / max_velocity.x * velocity.x
-                self.skeleton.set_animation(&WALK_BACKWARDS_ANIMATION, 1.0, 0.05);
+                self.skeleton.set_animation(&WALK_BACKWARDS_ANIMATION, walk_backwards_factor, 0.05);
             }
 
         } else {

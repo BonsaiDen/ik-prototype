@@ -100,19 +100,26 @@ impl Example {
             leanback_min: -45.0,
             leanback_max: 35.0,
             leanback_head_factor: 1.45,
+
+            // TODO move to weapon
             recoil_leanback_factor: 2.0,
             recoil_force: 7.0,
             recoil_damping: 0.9,
+
             idle_compression: 1.25,
             idle_speed: 5.0,
+
             land_compression: 10.0,
             land_compression_factor: 0.99,
             land_speed: 11.5,
+
             run_compression: 1.5,
             run_speed: 16.0,
+
             crouching_factor: 0.5,
             crouch_compression: 3.0,
             crouch_speed: 1.0
+
         };
 
         let player = Player::new(config.clone());
