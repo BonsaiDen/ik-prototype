@@ -19,8 +19,7 @@ pub struct Scarf {
     color: u32,
     offset: Vec2,
     facing: Vec2,
-    gravity: Vec2,
-    timer: f32
+    gravity: Vec2
 }
 
 impl Scarf {
@@ -38,7 +37,6 @@ impl Scarf {
             offset: Vec2::zero(),
             gravity: Vec2::zero(),
             facing: Vec2::new(1.0, 1.0),
-            timer: 0.0
         }
     }
 
@@ -80,15 +78,13 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Scarf {
         self.gravity = gravity;
     }
 
-    fn step(&mut self, dt: f32, collider: &C) {
-
-        self.timer += dt;
+    fn step(&mut self, renderer: &R, collider: &C) {
 
         // Don't let the scarf fall into rest
         self.particles.activate();
         self.particles.step(
-            dt,
-            Vec2::new(-200.0 * self.facing.x, (self.timer * 4.0).sin() * self.gravity.y * 0.5),
+            renderer.dt(),
+            Vec2::new(-200.0 * self.facing.x, (renderer.time() * 4.0).sin() * self.gravity.y * 0.5),
             |p| {
                 collider.local(&mut p.position);
             }

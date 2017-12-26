@@ -55,6 +55,7 @@ fn main() {
         height: height,
         scale: scale,
         buffer: vec![0; width * height],
+        time: 0.0,
         dt: 0.0
     };
 
@@ -94,6 +95,7 @@ fn main() {
         let d = (t - last_frame) as f32 / 1000.0;
         last_frame = t;
         context.dt = d as f32;
+        context.time += context.dt;
         example.draw(&mut context);
 
         // We unwrap here as we want this code to exit if it fails. Real applications may want to handle this in a different way
@@ -126,6 +128,7 @@ pub struct Context {
     height: usize,
     buffer: Vec<u32>,
     scale: f32,
+    time: f32,
     dt: f32
 }
 
@@ -175,8 +178,13 @@ impl Context {
 }
 
 impl Renderer for Context {
+
     fn dt(&self)-> f32 {
         self.dt
+    }
+
+    fn time(&self)-> f32 {
+        self.time
     }
 
     fn draw_circle(&mut self, c: Vec2, r: f32, color: u32) {

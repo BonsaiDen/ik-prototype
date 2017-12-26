@@ -47,7 +47,7 @@ pub struct Weapon {
     bone: &'static str,
     color: u32,
     has_ragdoll: bool,
-    ragdoll_timer: f32,
+    ragdoll_duration: f32,
     gravity: Vec2,
     direction: f32,
     recoil: f32,
@@ -65,7 +65,7 @@ impl Weapon {
             bone: "Root",
             color: color,
             has_ragdoll: false,
-            ragdoll_timer: 0.0,
+            ragdoll_duration: 0.0,
             gravity: Vec2::zero(),
             direction: 0.0,
             recoil: 0.0,
@@ -90,7 +90,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
     }
 
     fn attach(&mut self, _: &Skeleton) {
-        self.ragdoll_timer = 0.0;
+        self.ragdoll_duration = 0.0;
         self.has_ragdoll = false;
     }
 
@@ -106,7 +106,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
     }
 
     fn apply_force(&mut self, force: Vec2) {
-        self.ragdoll_timer = 0.0;
+        self.ragdoll_duration = 0.0;
         self.rigid.apply_dynamic_force(force);
     }
 
@@ -140,14 +140,15 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
         self.gravity = gravity;
     }
 
-    fn step(&mut self, dt: f32, collider: &C) {
+    fn step(&mut self, renderer: &R, collider: &C) {
         if self.has_ragdoll {
-            self.ragdoll_timer += dt;
 
-            let ragdoll_timer = self.ragdoll_timer;
-            self.rigid.step_dynamic(dt, self.gravity, |p| {
+            self.ragdoll_duration += renderer.dt();
+
+            let ragdoll_duration = self.ragdoll_duration;
+            self.rigid.step_dynamic(renderer.dt(), self.gravity, |p| {
                 if collider.world(&mut p.position) {
-                    if ragdoll_timer > 1.0 {
+                    if ragdoll_duration > 1.0 {
                         p.set_invmass(0.5);
                     }
                 }

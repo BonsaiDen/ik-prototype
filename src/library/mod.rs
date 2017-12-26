@@ -30,6 +30,7 @@ pub use self::stick_figure::{
 // Traits ---------------------------------------------------------------------
 pub trait Renderer {
     fn dt(&self) -> f32;
+    fn time(&self) -> f32;
     fn draw_line(&mut self, start: Vec2, end: Vec2, color: u32);
     fn draw_circle(&mut self, c: Vec2, r: f32, color: u32);
     fn draw_rect(&mut self, tr: Vec2, bl: Vec2, color: u32);
@@ -49,7 +50,7 @@ pub trait Accessory<R: Renderer, C: Collider>: Downcast {
     fn get_iks(&self, skeleton: &Skeleton) -> Option<Vec<(&'static str, Vec2, bool)>>;
     fn fixate(&mut self, skeleton: &Skeleton);
     fn set_gravity(&mut self, gravity: Vec2);
-    fn step(&mut self, f32, &C);
+    fn step(&mut self, renderer: &R, collider: &C);
     fn draw(&self, renderer: &mut R);
 }
 

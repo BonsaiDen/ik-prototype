@@ -578,7 +578,7 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         for accessory in self.accessories.values_mut() {
             accessory.fixate(&self.skeleton);
             accessory.set_gravity(Vec2::new(0.0, self.config.fall_limit * 100.0));
-            accessory.step(dt, &collider);
+            accessory.step(&renderer, &collider);
             accessory.draw(renderer);
         }
 
