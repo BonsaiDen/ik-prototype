@@ -6,6 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+// External Dependencies ------------------------------------------------------
+use downcast_rs::Downcast;
+
 
 // Internal Dependencies ------------------------------------------------------
 use ::lean::{Skeleton, Vec2};
@@ -36,15 +39,23 @@ pub trait Collider {
     fn local(&self, &mut Vec2) -> bool;
 }
 
-pub trait Attachement<R: Renderer, C: Collider> {
+pub trait Accessory<R: Renderer, C: Collider>: Downcast {
     fn set_bone(&mut self, &'static str);
-    fn loosen(&mut self, skeleton: &Skeleton);
-    fn fasten(&mut self, skeleton: &Skeleton);
+    fn attach(&mut self, skeleton: &Skeleton);
+    fn attached(&self) -> bool;
+    fn detach(&mut self, skeleton: &Skeleton);
     fn apply_force(&mut self, force: Vec2);
-    fn get_iks(&self, skeleton: &Skeleton, direction: f32, custom_offset: f32) -> Option<Vec<(&'static str, Vec2, bool)>>;
-    fn fixate(&mut self, skeleton: &Skeleton, angle: f32, custom_offset: f32);
+    fn get_iks(&self, skeleton: &Skeleton) -> Option<Vec<(&'static str, Vec2, bool)>>;
+    fn fixate(&mut self, skeleton: &Skeleton);
     fn set_gravity(&mut self, gravity: Vec2);
     fn step(&mut self, f32, &C);
     fn draw(&self, renderer: &mut R);
+}
+
+impl_downcast!(Accessory<R, C> where R: Renderer, C: Collider);
+
+pub trait WeaponAttachment {
+    fn set_recoil(&mut self, recoil: f32);
+    fn set_aim_direction(&mut self, direction: f32);
 }
 

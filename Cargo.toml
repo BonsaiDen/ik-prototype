@@ -7,4 +7,4 @@ authors = ["Ivo Wetzel <ivo.wetzel@googlemail.com>"]
 minifb = "*"
 line_drawing = "*"
 lazy_static = "*"
-
+downcast-rs = "*"

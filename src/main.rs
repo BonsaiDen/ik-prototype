@@ -12,6 +12,8 @@
 extern crate lazy_static;
 extern crate line_drawing;
 extern crate minifb;
+#[macro_use]
+extern crate downcast_rs;
 
 
 // STD Dependencies -----------------------------------------------------------
@@ -89,7 +91,9 @@ fn main() {
             window.is_key_down(Key::Space),
             window.get_mouse_down(MouseButton::Left),
             window.get_mouse_down(MouseButton::Right),
-            window.is_key_down(Key::Enter)
+            window.is_key_down(Key::Enter),
+            window.is_key_down(Key::R),
+            window.is_key_down(Key::P)
         );
 
         let t = precise_time_ms();

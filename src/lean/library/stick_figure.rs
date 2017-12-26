@@ -8,6 +8,7 @@
 
 
 // STD Dependencies -----------------------------------------------------------
+use std::any::Any;
 use std::f32::consts::PI;
 use std::collections::HashMap;
 
@@ -20,7 +21,7 @@ use lean::{
     f32_equals
 };
 
-use lean::library::{Attachement, Renderer, Collider};
+use lean::library::{Accessory, Renderer, Collider, StandardRifle, WeaponAttachment};
 
 
 // Statics --------------------------------------------------------------------
@@ -325,14 +326,14 @@ pub struct StickFigure<T: StickFigureState, R: Renderer, C: Collider> {
     was_grounded: bool,
 
     // Attachments
-    attachements: HashMap<&'static str, Box<Attachement<R, C>>>,
+    accessories: HashMap<&'static str, Box<Accessory<R, C>>>,
 
     // Visual feedback
     ragdoll_timer: f32
 
 }
 
-impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
+impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFigure<T, R, C> {
 
     pub fn default(state: T, config: StickFigureConfig) -> Self {
         StickFigure::from_skeleton(&DEFAULT_FIGURE_SKELETON, state, config)
@@ -360,23 +361,44 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
             ragdoll_timer: 0.0,
 
-            attachements: HashMap::new()
+            accessories: HashMap::new()
         }
     }
 
-    pub fn attach<A: Attachement<R, C> + 'static>(
+    pub fn add_accessory<A: Accessory<R, C> + 'static>(
         &mut self,
         name: &'static str,
         bone: &'static str,
-        attachement: A
+        accessory: A
     ) {
-        let mut a = Box::new(attachement) as Box<Attachement<R, C>>;
+        let mut a = Box::new(accessory) as Box<Accessory<R, C>>;
         a.set_bone(bone);
-        self.attachements.insert(name, a);
+        self.accessories.insert(name, a);
     }
 
-    pub fn get_mut(&mut self, name: &'static str) -> Option<&mut Box<Attachement<R, C>>> {
-        self.attachements.get_mut(name)
+    pub fn remove_accessory(&mut self, name: &'static str) -> Option<Box<Accessory<R, C>>> {
+        self.accessories.remove(name)
+    }
+
+    pub fn attach(&mut self, name: &'static str) {
+        if let Some(accessory) = self.accessories.get_mut(name) {
+            accessory.attach(&self.skeleton);
+        }
+    }
+
+    pub fn detach(&mut self, name: &'static str) {
+        if let Some(accessory) = self.accessories.get_mut(name) {
+            accessory.detach(&self.skeleton);
+        }
+    }
+
+    pub fn get_accessory_mut<A: Accessory<R, C>>(&mut self, name: &'static str) -> Option<&mut A> {
+        if let Some(a) = self.accessories.get_mut(name) {
+            a.downcast_mut::<A>()
+
+        } else {
+            None
+        }
     }
 
     pub fn world_offset(&self) -> Vec2 {
@@ -393,9 +415,12 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             let force = Vec2::new(-16.0, -31.0).scale(facing);
 
             // Update weapon model to support ragdoll
-            for attachement in self.attachements.values_mut() {
-                attachement.loosen(&self.skeleton);
-                attachement.apply_force(force * 0.5);
+            for accessory in self.accessories.values_mut() {
+                let was_attached = accessory.attached();
+                accessory.detach(&self.skeleton);
+                if was_attached {
+                    accessory.apply_force(force * 0.5);
+                }
             }
 
             // Setup skeleton ragdoll
@@ -404,8 +429,8 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             self.ragdoll_timer = 0.0;
 
         } else if self.state.is_alive() && self.skeleton.has_ragdoll() {
-            for attachement in self.attachements.values_mut() {
-                attachement.fasten(&self.skeleton);
+            for accessory in self.accessories.values_mut() {
+                accessory.attach(&self.skeleton);
             }
             self.skeleton.stop_ragdoll();
         }
@@ -482,9 +507,9 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             }
         });
 
-        // Attachement IKs
-        for attachement in self.attachements.values() {
-            if let Some(iks) = attachement.get_iks(&self.skeleton, direction, -self.recoil) {
+        // Accessory IKs
+        for accessory in self.accessories.values() {
+            if let Some(iks) = accessory.get_iks(&self.skeleton) {
                 for (bone, p, positive) in iks {
                     self.skeleton.apply_ik(bone, p, positive);
                 }
@@ -522,15 +547,25 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
         }, true);
 
+        // Draw Head
         let head = self.skeleton.get_bone_end_world("Head");
         renderer.draw_circle(head, 4.0, 0x00d0_d0d0);
 
+        // Handle weapon recoil
+        let recoil = self.recoil;
+
+        // TODO figure out a way to make this work for different weapon types
+        if let Some(rifle) = self.get_accessory_mut::<StandardRifle>("Weapon") {
+            rifle.set_aim_direction(direction);
+            rifle.set_recoil(recoil);
+        }
+
         // Draw attachments
-        for attachement in self.attachements.values_mut() {
-            attachement.fixate(&self.skeleton, direction, -self.recoil);
-            attachement.set_gravity(Vec2::new(0.0, self.config.fall_limit * 100.0));
-            attachement.step(dt, &collider);
-            attachement.draw(renderer);
+        for accessory in self.accessories.values_mut() {
+            accessory.fixate(&self.skeleton);
+            accessory.set_gravity(Vec2::new(0.0, self.config.fall_limit * 100.0));
+            accessory.step(dt, &collider);
+            accessory.draw(renderer);
         }
 
     }

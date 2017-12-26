@@ -9,7 +9,7 @@
 
 // Internal Dependencies ------------------------------------------------------
 use lean::{Vec2, ParticleSystem, ParticleTemplate, Skeleton};
-use lean::library::{Attachement, Renderer, Collider};
+use lean::library::{Accessory, Renderer, Collider};
 
 
 // A Scarf --------------------------------------------------------------------
@@ -44,29 +44,31 @@ impl Scarf {
 
 }
 
-impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
+impl<R: Renderer, C: Collider> Accessory<R, C> for Scarf {
 
     fn set_bone(&mut self, bone: &'static str) {
         self.bone = bone;
     }
 
-    fn loosen(&mut self, _: &Skeleton) {}
-
-    fn fasten(&mut self, _: &Skeleton) {
+    fn attach(&mut self, _: &Skeleton) {
         self.particles.visit_particles_mut(|_, p| {
             p.set_position(Vec2::zero());
         });
     }
 
+    fn attached(&self) -> bool {
+        true
+    }
+
+    fn detach(&mut self, _: &Skeleton) {}
+
     fn apply_force(&mut self, _: Vec2) {}
 
-    // TODO Figure out how to cleanly allow access to custom figure properties
-    fn get_iks(&self, _: &Skeleton, _: f32, _: f32) -> Option<Vec<(&'static str, Vec2, bool)>> {
+    fn get_iks(&self, _: &Skeleton) -> Option<Vec<(&'static str, Vec2, bool)>> {
         None
     }
 
-    fn fixate(&mut self, skeleton: &Skeleton, _: f32, _: f32) {
-        // TODO set attachment bone from the outside
+    fn fixate(&mut self, skeleton: &Skeleton) {
         let origin = skeleton.get_bone_end_local(self.bone);
         let offset = skeleton.get_bone_end_world(self.bone) - origin;
         self.facing = skeleton.local_transform();

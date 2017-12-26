@@ -103,7 +103,11 @@ impl RigidBody {
     }
 
     pub fn apply_dynamic_force(&mut self, force: Vec2) {
+        self.particles.activate();
         self.particles.get_mut(0).apply_force(force);
+        self.particles.visit_particles_mut(|_, p| {
+            p.set_invmass(1.0);
+        });
     }
 
     pub fn step_dynamic<C: Fn(&mut Particle)>(&mut self, time_step: f32, gravity: Vec2, collision: C) {

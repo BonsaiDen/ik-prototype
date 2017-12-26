@@ -13,7 +13,7 @@ use std::f32::consts::PI;
 
 // Internal Dependencies ------------------------------------------------------
 use lean::{Angle, Vec2, Skeleton, RigidBody, RigidBodyData};
-use lean::library::{Attachement, Renderer, Collider};
+use lean::library::{Accessory, Renderer, Collider, WeaponAttachment};
 
 
 // Statics --------------------------------------------------------------------
@@ -45,6 +45,8 @@ pub struct StandardRifle {
     has_ragdoll: bool,
     ragdoll_timer: f32,
     gravity: Vec2,
+    direction: f32,
+    recoil: f32,
     rigid: RigidBody
 }
 
@@ -57,64 +59,83 @@ impl StandardRifle {
             has_ragdoll: false,
             ragdoll_timer: 0.0,
             gravity: Vec2::zero(),
+            direction: 0.0,
+            recoil: 0.0,
             rigid: RigidBody::new(&WEAPON_RIGID)
         }
     }
 
 }
 
-impl<R: Renderer, C: Collider> Attachement<R, C> for StandardRifle {
+impl WeaponAttachment for StandardRifle {
+
+    fn set_recoil(&mut self, recoil: f32) {
+        self.recoil = recoil;
+    }
+
+    fn set_aim_direction(&mut self, direction: f32) {
+        self.direction = direction;
+    }
+
+}
+
+impl<R: Renderer, C: Collider> Accessory<R, C> for StandardRifle {
 
     fn set_bone(&mut self, bone: &'static str) {
         self.bone = bone;
     }
 
-    fn loosen(&mut self, _: &Skeleton) {
-        self.has_ragdoll = true;
-        self.rigid.make_dynamic();
-    }
-
-    fn fasten(&mut self, _: &Skeleton) {
+    fn attach(&mut self, _: &Skeleton) {
         self.ragdoll_timer = 0.0;
         self.has_ragdoll = false;
     }
 
+    fn attached(&self) -> bool {
+        !self.has_ragdoll
+    }
+
+    fn detach(&mut self, _: &Skeleton) {
+        if !self.has_ragdoll {
+            self.has_ragdoll = true;
+            self.rigid.make_dynamic();
+        }
+    }
+
     fn apply_force(&mut self, force: Vec2) {
+        self.ragdoll_timer = 0.0;
         self.rigid.apply_dynamic_force(force);
     }
 
-    // TODO Figure out how to cleanly allow access to custom figure properties
-    fn get_iks(&self, skeleton: &Skeleton, direction: f32, custom_offset: f32) -> Option<Vec<(&'static str, Vec2, bool)>> {
+    fn get_iks(&self, skeleton: &Skeleton) -> Option<Vec<(&'static str, Vec2, bool)>> {
         if self.has_ragdoll {
             None
 
         } else {
             let shoulder = skeleton.get_bone_end_ik(self.bone);
-            let facing = Angle::facing(direction + PI * 0.5).to_vec();
+            let facing = Angle::facing(self.direction + PI * 0.5).to_vec();
 
-            let grip_angle = Angle::transform(direction, facing);
-            let grip = shoulder + Angle::offset(grip_angle, 17.0 + custom_offset) + Angle::offset(grip_angle + PI * 0.5, 1.0);
-            let trigger = shoulder + Angle::offset(grip_angle, 6.5 + custom_offset * 0.5) + Angle::offset(grip_angle + PI * 0.5, 4.0);
+            let grip_angle = Angle::transform(self.direction, facing);
+            let grip = shoulder + Angle::offset(grip_angle, 17.0 - self.recoil) + Angle::offset(grip_angle + PI * 0.5, 1.0);
+            let trigger = shoulder + Angle::offset(grip_angle, 6.5 - self.recoil * 0.5) + Angle::offset(grip_angle + PI * 0.5, 4.0);
 
             Some(vec![
-                 ("L.Hand", grip, true),
+                ("L.Hand", grip, true),
                 ("R.Hand", trigger, true)
             ])
         }
     }
 
-    // TODO Figure out how to cleanly allow access to custom figure properties
-    fn fixate(&mut self, skeleton: &Skeleton, direction: f32, custom_offset: f32) {
+    fn fixate(&mut self, skeleton: &Skeleton) {
         if !self.has_ragdoll {
 
             let shoulder = skeleton.get_bone_end_world(self.bone);
-            let facing = Angle::facing(direction + PI * 0.5).to_vec();
+            let facing = Angle::facing(self.direction + PI * 0.5).to_vec();
 
             self.rigid.step_static(
                 shoulder,
-                Vec2::new(custom_offset, 0.0),
+                Vec2::new(-self.recoil, 0.0),
                 facing.flipped(),
-                direction
+                self.direction
             );
 
         }

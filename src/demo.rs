@@ -9,7 +9,9 @@
 
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
-use lean::library::{Collider, StickFigure, StickFigureConfig, Scarf, StandardRifle};
+use lean::library::{
+    Accessory, Collider, StickFigure, StickFigureConfig, Scarf, StandardRifle
+};
 
 use super::Context;
 use super::player::{Player, PlayerState};
@@ -111,8 +113,8 @@ impl Demo {
 
         let player = Player::new(config.clone());
         let mut figure = StickFigure::default(player.get_state(), config);
-        figure.attach("Scarf", "Neck", Scarf::new(24.0, 6, 0x00ff_ff00));
-        figure.attach("Weapon", "Back", StandardRifle::new(0x00ff_ff00));
+        figure.add_accessory("Scarf", "Neck", Scarf::new(24.0, 6, 0x00ff_ff00));
+        figure.add_accessory("Weapon", "Back", StandardRifle::new(0x00ff_ff00));
 
         Self {
             player: player,
@@ -135,7 +137,9 @@ impl Demo {
         jump: bool,
         fire: bool,
         kill: bool,
-        reset: bool
+        reset: bool,
+        release: bool,
+        pickup: bool
     ) {
 
         if let Some((x, y)) = mouse_pos {
@@ -148,6 +152,13 @@ impl Demo {
 
         if reset {
             self.player.set_hp(255);
+        }
+
+        if release {
+            self.figure.detach("Weapon");
+
+        } else if pickup {
+            self.figure.attach("Weapon");
         }
 
         self.player.update_server(fire);
