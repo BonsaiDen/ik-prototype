@@ -9,6 +9,7 @@
 
 // STD Dependencies -----------------------------------------------------------
 use std::f32::consts::PI;
+use std::collections::HashMap;
 
 
 // Internal Dependencies ------------------------------------------------------
@@ -19,10 +20,7 @@ use lean::{
     f32_equals
 };
 
-use lean::library::{
-    Attachement, Renderer, Collider,
-    Scarf, StandardRifle
-};
+use lean::library::{Attachement, Renderer, Collider};
 
 
 // Statics --------------------------------------------------------------------
@@ -327,7 +325,7 @@ pub struct StickFigure<T: StickFigureState, R: Renderer, C: Collider> {
     was_grounded: bool,
 
     // Attachments
-    attachements: Vec<Box<Attachement<R, C>>>,
+    attachements: HashMap<&'static str, Box<Attachement<R, C>>>,
 
     // Visual feedback
     ragdoll_timer: f32
@@ -362,11 +360,23 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
 
             ragdoll_timer: 0.0,
 
-            attachements: vec![
-                Box::new(Scarf::new(24.0, 6)),
-                Box::new(StandardRifle::new())
-            ]
+            attachements: HashMap::new()
         }
+    }
+
+    pub fn attach<A: Attachement<R, C> + 'static>(
+        &mut self,
+        name: &'static str,
+        bone: &'static str,
+        attachement: A
+    ) {
+        let mut a = Box::new(attachement) as Box<Attachement<R, C>>;
+        a.set_bone(bone);
+        self.attachements.insert(name, a);
+    }
+
+    pub fn get_mut(&mut self, name: &'static str) -> Option<&mut Box<Attachement<R, C>>> {
+        self.attachements.get_mut(name)
     }
 
     pub fn world_offset(&self) -> Vec2 {
@@ -383,7 +393,7 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             let force = Vec2::new(-16.0, -31.0).scale(facing);
 
             // Update weapon model to support ragdoll
-            for attachement in &mut self.attachements {
+            for attachement in self.attachements.values_mut() {
                 attachement.loosen(&self.skeleton);
                 attachement.apply_force(force * 0.5);
             }
@@ -394,7 +404,7 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
             self.ragdoll_timer = 0.0;
 
         } else if self.state.is_alive() && self.skeleton.has_ragdoll() {
-            for attachement in &mut self.attachements {
+            for attachement in self.attachements.values_mut() {
                 attachement.fasten(&self.skeleton);
             }
             self.skeleton.stop_ragdoll();
@@ -473,7 +483,7 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
         });
 
         // Attachement IKs
-        for attachement in &self.attachements {
+        for attachement in self.attachements.values() {
             if let Some(iks) = attachement.get_iks(&self.skeleton, direction, -self.recoil) {
                 for (bone, p, positive) in iks {
                     self.skeleton.apply_ik(bone, p, positive);
@@ -516,7 +526,7 @@ impl<T: StickFigureState, R: Renderer, C: Collider> StickFigure<T, R, C> {
         renderer.draw_circle(head, 4.0, 0x00d0_d0d0);
 
         // Draw attachments
-        for attachement in &mut self.attachements {
+        for attachement in self.attachements.values_mut() {
             attachement.fixate(&self.skeleton, direction, -self.recoil);
             attachement.set_gravity(Vec2::new(0.0, self.config.fall_limit * 100.0));
             attachement.step(dt, &collider);

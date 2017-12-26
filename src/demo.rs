@@ -9,7 +9,7 @@
 
 // Internal Dependencies ------------------------------------------------------
 use lean::Vec2;
-use lean::library::{Collider, StickFigure, StickFigureConfig};
+use lean::library::{Collider, StickFigure, StickFigureConfig, Scarf, StandardRifle};
 
 use super::Context;
 use super::player::{Player, PlayerState};
@@ -110,7 +110,10 @@ impl Demo {
         };
 
         let player = Player::new(config.clone());
-        let figure = StickFigure::default(player.get_state(), config);
+        let mut figure = StickFigure::default(player.get_state(), config);
+        figure.attach("Scarf", "Neck", Scarf::new(24.0, 6, 0x00ff_ff00));
+        figure.attach("Weapon", "Back", StandardRifle::new(0x00ff_ff00));
+
         Self {
             player: player,
             figure: figure,

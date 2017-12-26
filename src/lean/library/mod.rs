@@ -37,6 +37,7 @@ pub trait Collider {
 }
 
 pub trait Attachement<R: Renderer, C: Collider> {
+    fn set_bone(&mut self, &'static str);
     fn loosen(&mut self, skeleton: &Skeleton);
     fn fasten(&mut self, skeleton: &Skeleton);
     fn apply_force(&mut self, force: Vec2);

@@ -40,6 +40,8 @@ lazy_static! {
 
 // Standard Rifle Rigid Body --------------------------------------------------
 pub struct StandardRifle {
+    bone: &'static str,
+    color: u32,
     has_ragdoll: bool,
     ragdoll_timer: f32,
     gravity: Vec2,
@@ -48,8 +50,10 @@ pub struct StandardRifle {
 
 impl StandardRifle {
 
-    pub fn new() -> Self {
+    pub fn new(color: u32) -> Self {
         Self {
+            bone: "Root",
+            color: color,
             has_ragdoll: false,
             ragdoll_timer: 0.0,
             gravity: Vec2::zero(),
@@ -60,6 +64,10 @@ impl StandardRifle {
 }
 
 impl<R: Renderer, C: Collider> Attachement<R, C> for StandardRifle {
+
+    fn set_bone(&mut self, bone: &'static str) {
+        self.bone = bone;
+    }
 
     fn loosen(&mut self, _: &Skeleton) {
         self.has_ragdoll = true;
@@ -81,8 +89,7 @@ impl<R: Renderer, C: Collider> Attachement<R, C> for StandardRifle {
             None
 
         } else {
-            // TODO set attachment bone from the outside
-            let shoulder = skeleton.get_bone_end_ik("Back");
+            let shoulder = skeleton.get_bone_end_ik(self.bone);
             let facing = Angle::facing(direction + PI * 0.5).to_vec();
 
             let grip_angle = Angle::transform(direction, facing);
@@ -100,8 +107,7 @@ impl<R: Renderer, C: Collider> Attachement<R, C> for StandardRifle {
     fn fixate(&mut self, skeleton: &Skeleton, direction: f32, custom_offset: f32) {
         if !self.has_ragdoll {
 
-            // TODO set attachment bone from the outside
-            let shoulder = skeleton.get_bone_end_world("Back");
+            let shoulder = skeleton.get_bone_end_world(self.bone);
             let facing = Angle::facing(direction + PI * 0.5).to_vec();
 
             self.rigid.step_static(

@@ -14,7 +14,9 @@ use lean::library::{Attachement, Renderer, Collider};
 
 // A Scarf --------------------------------------------------------------------
 pub struct Scarf {
+    bone: &'static str,
     particles: ParticleSystem,
+    color: u32,
     offset: Vec2,
     facing: Vec2,
     gravity: Vec2,
@@ -23,14 +25,16 @@ pub struct Scarf {
 
 impl Scarf {
 
-    pub fn new(length: f32, segments: usize) -> Self {
+    pub fn new(length: f32, segments: usize, color: u32) -> Self {
         Self {
+            bone: "Root",
             particles: ParticleTemplate::schal(
                 1,
                 segments,
                 length / segments as f32,
                 Vec2::zero()
             ),
+            color: color,
             offset: Vec2::zero(),
             gravity: Vec2::zero(),
             facing: Vec2::new(1.0, 1.0),
@@ -41,6 +45,10 @@ impl Scarf {
 }
 
 impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
+
+    fn set_bone(&mut self, bone: &'static str) {
+        self.bone = bone;
+    }
 
     fn loosen(&mut self, _: &Skeleton) {}
 
@@ -59,8 +67,8 @@ impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
 
     fn fixate(&mut self, skeleton: &Skeleton, _: f32, _: f32) {
         // TODO set attachment bone from the outside
-        let origin = skeleton.get_bone_end_local("Neck");
-        let offset = skeleton.get_bone_end_world("Neck") - origin;
+        let origin = skeleton.get_bone_end_local(self.bone);
+        let offset = skeleton.get_bone_end_world(self.bone) - origin;
         self.facing = skeleton.local_transform();
         self.particles.get_mut(0).set_position(origin);
         self.offset = offset;
@@ -88,7 +96,7 @@ impl<R: Renderer, C: Collider> Attachement<R, C> for Scarf {
 
     fn draw(&self, renderer: &mut R) {
         self.particles.visit_particles_chained(|_, p, n| {
-            renderer.draw_line(self.offset + p.position, self.offset + n.position, 0x00ff_ff00);
+            renderer.draw_line(self.offset + p.position, self.offset + n.position, self.color);
         });
     }
 
