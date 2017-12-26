@@ -21,10 +21,10 @@ lazy_static! {
 
     static ref WEAPON_RIFLE_RIGID: RigidBodyData = RigidBodyData {
         points: vec![
-            ("Center", 15.0, 0.0),
+            ("Center", 14.0, 0.0),
             ("Barrel", 30.0, 0.0),
             ("StockMid", 0.0, 0.0),
-            ("StockLow", 0.0, 5.0),
+            ("StockLow", 0.0, 7.0),
         ],
         constraints: vec![
             ("Center", "Barrel", true),
@@ -35,7 +35,7 @@ lazy_static! {
         ],
         iks: vec![
             ("L.Hand", 17.0, 1.0, true),
-            ("R.Hand", 10.0, 6.0, true)
+            ("R.Hand", 9.0, 4.0, true)
         ]
     };
 
@@ -157,12 +157,14 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
 
     fn draw(&self, renderer: &mut R) {
         if self.has_ragdoll {
-            self.rigid.visit_dynamic(|(_, a), (_, b), _| {
-                renderer.draw_line(
-                    a,
-                    b,
-                    self.color
-                );
+            self.rigid.visit_dynamic(|(_, a), (_, b), visible| {
+                if visible {
+                    renderer.draw_line(
+                        a,
+                        b,
+                        self.color
+                    );
+                }
             });
 
         } else {

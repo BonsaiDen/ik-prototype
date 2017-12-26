@@ -274,7 +274,7 @@ impl Skeleton {
 
                 ParticleSystem::accumulate_forces(gravity, &mut self.particles[..]);
                 ParticleSystem::verlet(dt, &mut self.particles[..]);
-                if !ParticleSystem::satisfy_constraints(2, &mut self.particles[..], &self.constraints[..], collider) {
+                if !ParticleSystem::satisfy_constraints(3, &mut self.particles[..], &self.constraints[..], collider) {
                     self.ragdoll_steps_until_rest = self.ragdoll_steps_until_rest.saturating_sub(1);
                 }
 

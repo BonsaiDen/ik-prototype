@@ -25,11 +25,6 @@ use lean::Vec2;
 use lean::library::Renderer;
 
 
-// Statics --------------------------------------------------------------------
-const WIDTH: usize = 320;
-const HEIGHT: usize = 240;
-
-
 // Modules --------------------------------------------------------------------
 mod stick_example;
 use self::stick_example::Example;
@@ -38,10 +33,15 @@ use self::stick_example::Example;
 // Main -----------------------------------------------------------------------
 fn main() {
 
+    let scale = 0.5;
+    let inv_scale = 1.0 / scale;
+    let width = (640.0 * scale) as usize;
+    let height = (480.0 * scale) as usize;
+
     let mut window = Window::new(
         "IK Prototype - ESC to exit",
-        WIDTH,
-        HEIGHT,
+        width,
+        height,
         WindowOptions {
            scale: Scale::X2,
             .. WindowOptions::default()
@@ -51,10 +51,10 @@ fn main() {
 
 
     let mut context = Context {
-        width: WIDTH,
-        height: HEIGHT,
-        scale: 0.5,
-        buffer: vec![0; WIDTH * HEIGHT],
+        width: width,
+        height: height,
+        scale: scale,
+        buffer: vec![0; width * height],
         dt: 0.0
     };
 
@@ -62,7 +62,7 @@ fn main() {
     let mut accumulated_wait = Duration::from_millis(0);
     let mut last_frame = precise_time_ms();
 
-    let mut example = Example::new(WIDTH as f32 * 2.0, HEIGHT as f32 * 2.0);
+    let mut example = Example::new(width as f32 * inv_scale, height as f32 * inv_scale);
     while window.is_open() && !window.is_key_down(Key::C) {
 
         for i in &mut context.buffer {

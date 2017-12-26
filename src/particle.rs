@@ -214,7 +214,7 @@ impl Particle {
     }
 
     pub fn at_rest(&mut self) -> bool {
-        if (self.position - self.rest_position).len().abs() > 0.1 {
+        if (self.position - self.rest_position).len().abs() > 0.125 {
             self.rest_position = self.position;
             false
 
