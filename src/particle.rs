@@ -97,20 +97,24 @@ impl Constraint for StickConstraint {
 
 }
 
-/*
+
 pub struct AngularConstraint {
     a: usize,
     b: usize,
-    angle: f32
+    c: usize,
+    min: Option<f32>,
+    max: Option<f32>
 }
 
 impl AngularConstraint {
 
-    pub fn new(a: usize, b: usize, angle: f32) -> Self {
+    pub fn new(a: usize, b: usize, c: usize, min: Option<f32>, max: Option<f32>) -> Self {
         Self {
             a,
             b,
-            angle
+            c,
+            min,
+            max
         }
     }
 
@@ -132,37 +136,62 @@ impl Constraint for AngularConstraint {
 
     fn solve(&self, particles: &mut [Particle]) {
 
-        let top = particles[self.a].position;
-        let bot = particles[self.b].position;
-        let da = top.angle_between(bot); // TODO does this return -PI to PI ?
-        if da > self.angle {
+        let p1 = particles[self.a].position;
+        let p2 = particles[self.b].position;
+        let p3 = particles[self.c].position;
 
-            // TODO need length on particle
-            // TODO we need to unify the bones with the particles!
-            // let l = particles[self.b].len();
+        // Angle between segments
+        let top = p1 - p2;
+        let bot = p2 - p3;
 
-            /*
-            float l = bot.Length();   // store length of wrist
-            bot = top.UnitVector();   // copy orientation
-            bot.Mult(-l);             // scale to original length
+        // Angle of parent segment
+        let pa = (p2 - p1).angle();
 
-                // difference of where it is, and where it should be:
-            Vector diff = t3.pos - (t2.pos+bot);
+        // Relative angle to parent
+        let da = top.angle_between(bot) + pa;
 
-                // scale it to half length:
-            diff.Mult(0.5);
+        let mut limited = false;
+        let mut limit = 0.0;
+        let min = self.min.unwrap_or(0.0);
+        let max = self.max.unwrap_or(0.0);
 
-            // give knee and foot one push each in opposite dirs:
-            t3.pos = t3.pos - diff;
-            t2.pos = t2.pos + diff;
-            */
+        // Check for limits
+        if self.min.is_some() && da < min + pa {
+            limited = true;
+            limit = min + pa;
+
+        } else if self.max.is_some() && da > max + pa {
+            limited = true;
+            limit = max + pa
+        }
+
+        // Apply correction
+        if limited {
+
+            // TODO this smooths things out, but why?
+            let limit = (limit + da) * 0.5;
+
+            // Relative target vector
+            let l = bot.len();
+            let target = Vec2::new(
+                limit.cos() * l,
+                limit.sin() * l
+            );
+
+            let i2 = particles[self.b].inv_mass;
+            let i3 = particles[self.c].inv_mass;
+
+            // Absolute target location of child
+            let diff = (p3 - (p2 + target)) * 0.5 * (i2 + i3);
+            particles[self.b].position = p2 + diff * i2;
+            particles[self.c].position = p3 - diff * i3;
 
         }
 
     }
 
 }
-*/
+
 
 // 2D Particle Abstraction ----------------------------------------------------
 #[derive(Default, Debug, Copy, Clone)]

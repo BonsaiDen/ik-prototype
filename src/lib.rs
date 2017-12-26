@@ -23,7 +23,7 @@ pub use self::animation::{Animation, AnimationData};
 
 mod particle;
 pub use self::particle::{
-    Constraint, StickConstraint,
+    Constraint, AngularConstraint, StickConstraint,
     Particle, ParticleLike, ParticleSystem, ParticleSystemLike, ParticleTemplate
 };
 
