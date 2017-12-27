@@ -82,11 +82,15 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Scarf {
 
         // Don't let the scarf fall into rest
         self.particles.activate();
+
+        let world_offset = self.offset;
         self.particles.step(
             renderer.dt(),
             Vec2::new(-200.0 * self.facing.x, (renderer.time() * 4.0).sin() * self.gravity.y * 0.5),
             |p| {
-                collider.local(&mut p.position);
+                if let Some(pos) = collider.world(p.position + world_offset) {
+                    p.position = pos - world_offset;
+                }
             }
         );
 

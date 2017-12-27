@@ -147,7 +147,8 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
 
             let ragdoll_duration = self.ragdoll_duration;
             self.rigid.step_dynamic(renderer.dt(), self.gravity, |p| {
-                if collider.world(&mut p.position) {
+                if let Some(pos) = collider.world(p.position) {
+                    p.position = pos;
                     if ragdoll_duration > 1.0 {
                         p.set_invmass(0.5);
                     }

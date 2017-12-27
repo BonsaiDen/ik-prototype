@@ -52,23 +52,14 @@ impl LevelCollider {
 
 impl Collider for LevelCollider {
 
-    fn local(&self, p: &mut Vec2) -> bool {
-        if p.y > self.floor_local.y {
-            p.y = p.y.min(self.floor_local.y);
-            true
+    fn world(&self, mut p: Vec2) -> Option<Vec2> {
+        let max = self.floor_world.y;
+        if p.y > max {
+            p.y = p.y.min(max);
+            Some(p)
 
         } else {
-            false
-        }
-    }
-
-    fn world(&self, p: &mut Vec2) -> bool {
-        if p.y > self.floor_world.y {
-            p.y = p.y.min(self.floor_world.y);
-            true
-
-        } else {
-            false
+            None
         }
     }
 

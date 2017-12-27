@@ -523,8 +523,10 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         );
 
         // Animate and Arrange
+        let world_offset = self.skeleton.world_offset();
         self.skeleton.step(dt, Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
-            if collider.local(&mut p.position) {
+            if let Some(pos) = collider.world(p.position + world_offset) {
+                p.position = pos - world_offset;
                 if ragdoll_timer > 1.0 {
                     p.set_invmass(0.5);
                 }
@@ -542,14 +544,14 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
 
         // Leg IKs
         if self.state.is_grounded() {
-            let mut foot_l = self.skeleton.get_bone_end_ik("L.Foot");
-            if collider.local(&mut foot_l) {
-                self.skeleton.apply_ik("L.Foot", foot_l, false);
+            let foot_l = self.skeleton.get_bone_end_ik("L.Foot");
+            if let Some(p) = collider.world(foot_l + world_offset) {
+                self.skeleton.apply_ik("L.Foot", p - world_offset, false);
             }
 
-            let mut foot_r = self.skeleton.get_bone_end_ik("R.Foot");
-            if collider.local(&mut foot_r) {
-                self.skeleton.apply_ik("R.Foot", foot_r, false);
+            let foot_r = self.skeleton.get_bone_end_ik("R.Foot");
+            if let Some(p) = collider.world(foot_r + world_offset) {
+                self.skeleton.apply_ik("R.Foot", p - world_offset, false);
             }
         }
 

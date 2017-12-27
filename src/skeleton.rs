@@ -273,7 +273,6 @@ impl Skeleton {
             (left, right)
         };
 
-        let o = self.get_bone_index(parent).length();
         let a = self.get_bone_index(child).length();
         let b = self.get_bone_index(joint).length();
 
