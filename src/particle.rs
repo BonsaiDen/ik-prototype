@@ -101,20 +101,26 @@ pub struct AngularConstraint {
     a: usize,
     b: usize,
     c: usize,
-    min: Option<f32>,
-    max: Option<f32>
+    rest_length: f32,
+    is_left: bool,
+    visible: bool
 }
 
 impl AngularConstraint {
 
-    pub fn new(a: usize, b: usize, c: usize, min: Option<f32>, max: Option<f32>) -> Self {
+    pub fn new(a: usize, b: usize, c: usize, rest_length: f32, is_left: bool) -> Self {
         Self {
             a,
             b,
             c,
-            min,
-            max
+            rest_length,
+            is_left,
+            visible: false
         }
+    }
+
+    pub fn set_visible(&mut self, visual: bool) {
+        self.visible = visual;
     }
 
 }
@@ -122,7 +128,7 @@ impl AngularConstraint {
 impl Constraint for AngularConstraint {
 
     fn visible(&self) -> bool {
-        false
+        self.visible
     }
 
     fn first_particle(&self) -> usize {
@@ -135,57 +141,31 @@ impl Constraint for AngularConstraint {
 
     fn solve(&self, particles: &mut [Particle]) {
 
-        let p1 = particles[self.a].position;
-        let p2 = particles[self.b].position;
-        let p3 = particles[self.c].position;
+        let i1 = particles[self.a].inv_mass;
+        let i2 = particles[self.b].inv_mass;
 
-        // Angle between segments
-        let top = p1 - p2;
-        let bot = p2 - p3;
+        if i1 + i2 > 0.0 {
 
-        // Angle of parent segment
-        let pa = (p2 - p1).angle();
+            let p1 = particles[self.a].position;
+            let p2 = particles[self.b].position;
+            let delta = p2 - p1;
 
-        // Relative angle to parent
-        let da = top.angle_between(bot) + pa;
+            // Fast inverse square root
+            let dot = delta * delta;
+            let x2 = dot * 0.5;
+            let x = 0x5f37_5a86 - (dot.to_bits() >> 1);
+            let y = f32::from_bits(x);
+            let delta_length = 1.0 / (y * (1.5 - (x2 * y * y)));
 
-        let mut limited = false;
-        let mut limit = 0.0;
-        let min = self.min.unwrap_or(0.0) + pa;
-        let max = self.max.unwrap_or(0.0) + pa;
+            // 1. Check that angle is actually smaller
+            // 2. Check that the that p2 is on matches
+            if delta_length < self.rest_length &&
+                self.is_left == p2.is_left(p1, particles[self.c].position) {
 
-        // Check for limits
-        let delta = if self.min.is_some() && da < min {
-            limited = true;
-            limit = min;
-            min - da
-
-        } else if self.max.is_some() && da > max {
-            limited = true;
-            limit = max;
-            da - max
-
-        } else {
-            0.0
-        };
-
-        // Apply correction
-        if limited {
-
-            // Relative target vector
-            let l = bot.len();
-            let target = Vec2::new(
-                limit.cos() * l,
-                limit.sin() * l
-            );
-
-            let i2 = particles[self.b].inv_mass;
-            let i3 = particles[self.c].inv_mass;
-
-            // Absolute target location of child
-            // let diff = (p3 - (p2 + target)) * 0.5 * (i2 + i3) * delta.min(0.1);
-            // particles[self.b].position = p2 + diff * i2;
-            // particles[self.c].position = p3 - diff * i3;
+                let diff = (delta_length - self.rest_length) / (delta_length * (i1 + i2));
+                particles[self.a].position = p1 + delta * i1 * diff;
+                particles[self.b].position = p2 - delta * i2 * diff;
+            }
 
         }
 

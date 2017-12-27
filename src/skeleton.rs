@@ -21,7 +21,7 @@ use super::{Constraint, AngularConstraint, StickConstraint, Particle, ParticleLi
 // Types ----------------------------------------------------------------------
 pub enum SkeletalConstraint {
     Stick(&'static str, &'static str),
-    Angular(&'static str, &'static str, &'static str, Option<f32>, Option<f32>)
+    Angular(&'static str, &'static str, f32, f32)
 }
 
 type SkeletalBoneDescription = (
@@ -235,13 +235,38 @@ impl Skeleton {
                         Box::new(StickConstraint::new(parent, child, (ap - bp).len()))
                     );
                 },
-                SkeletalConstraint::Angular(parent, joint, child, min, max) => {
-                    let parent = self.get_bone(parent).unwrap().index();
+                SkeletalConstraint::Angular(joint, bone, left, right) => {
+
+                    let parent = self.get_bone(joint).unwrap().parent().unwrap();
                     let joint = self.get_bone(joint).unwrap().index();
-                    let child = self.get_bone(child).unwrap().index();
-                    self.constraints.push(
-                        Box::new(AngularConstraint::new(parent, joint, child, min, max))
-                    );
+                    let bone = self.get_bone(bone).unwrap().index();
+
+                    let a = self.get_bone_index(parent).length();
+                    let b = self.get_bone_index(bone).length();
+
+                    // Fixed
+                    if left == right {
+                        let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
+                        self.constraints.push(
+                            Box::new(StickConstraint::new(parent, bone, rest_length))
+                        );
+
+                    // Variable
+                    } else {
+
+
+                        let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
+                        self.constraints.push(
+                            Box::new(AngularConstraint::new(parent, bone, joint, rest_length, true))
+                        );
+
+                        let rest_length = (a * a + b * b - 2.0 * a * b * right.cos()).sqrt();
+                        self.constraints.push(
+                            Box::new(AngularConstraint::new(parent, bone, joint, rest_length, false))
+                        );
+
+                    }
+
                 }
             }
         }

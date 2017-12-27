@@ -76,7 +76,11 @@ impl Vec2 {
         }
     }
 
-    pub fn len_squar(&self) -> f32 {
+    pub fn is_left(&self, a: Vec2, b: Vec2) -> bool {
+        ((b.x - a.x) * (self.y - a.y) - (b.y - a.y) * (self.x - a.x)).signum() == -1.0
+    }
+
+    pub fn len_square(&self) -> f32 {
         self.x + self.y
     }
 

@@ -51,30 +51,18 @@ lazy_static! {
             ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 12
         ],
         constraints: vec![
-            SkeletalConstraint::Stick("Back", "L.Leg"),
-            SkeletalConstraint::Stick("Back", "R.Leg"),
-            SkeletalConstraint::Stick("Head", "L.Leg"),
-            SkeletalConstraint::Stick("Head", "R.Leg"),
-            SkeletalConstraint::Stick( "Hip", "L.Arm"),
-            SkeletalConstraint::Stick( "Hip", "R.Arm"),
-
-            // TODO Fix issues with angular constraints, target angle is calculated incorrectly
-
-            // Root -> Back
-            // negative offset causes problems
-            //SkeletalConstraint::Angular("Back", "Root", "Hip", Some(-D12), Some(D12)),
-            //SkeletalConstraint::Angular("Hip", "Root", "Back", Some(-D22), Some(D45)),
+            SkeletalConstraint::Stick("Back", "L.Foot"),
+            SkeletalConstraint::Stick("Back", "R.Foot"),
+            SkeletalConstraint::Stick("Head", "Hip"),
 
             // Back -> Head
-            //SkeletalConstraint::Angular("Root", "Back", "Head", Some(-D45), Some(D45)),
+            SkeletalConstraint::Angular("Back", "Head", D45, D45),
 
-            // // Root -> Hip
+            // L.Leg -> L.Foot
+            SkeletalConstraint::Angular("L.Leg", "L.Foot", 0.0, D90 * 1.5),
 
-            // // L.Leg -> L.Foot
-            //SkeletalConstraint::Angular("Hip", "L.Leg", "L.Foot", Some(0.0), Some(D90)),
-
-            // // R.Leg -> R.Foot
-            //SkeletalConstraint::Angular("Hip", "R.Leg", "R.Foot", Some(0.0), Some(D90))
+            // R.Leg -> R.Foot
+            SkeletalConstraint::Angular("R.Leg", "R.Foot", 0.0, D90 * 1.5)
 
         ]
 
