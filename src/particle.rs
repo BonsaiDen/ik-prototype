@@ -87,6 +87,7 @@ impl Constraint for StickConstraint {
             let x = 0x5f37_5a86 - (dot.to_bits() >> 1);
             let y = f32::from_bits(x);
             let delta_length = 1.0 / (y * (1.5 - (x2 * y * y)));
+
             let diff = (delta_length - self.rest_length) / (delta_length * (i1 + i2));
             particles[self.a].position = p1 + delta * i1 * diff;
             particles[self.b].position = p2 - delta * i2 * diff;
@@ -98,9 +99,9 @@ impl Constraint for StickConstraint {
 }
 
 pub struct AngularConstraint {
-    a: usize,
-    b: usize,
-    c: usize,
+    p: usize,
+    e: usize,
+    j: usize,
     rest_length: f32,
     is_left: bool,
     visible: bool
@@ -108,11 +109,11 @@ pub struct AngularConstraint {
 
 impl AngularConstraint {
 
-    pub fn new(a: usize, b: usize, c: usize, rest_length: f32, is_left: bool) -> Self {
+    pub fn new(p: usize, e: usize, j: usize, rest_length: f32, is_left: bool) -> Self {
         Self {
-            a,
-            b,
-            c,
+            p,
+            e,
+            j,
             rest_length,
             is_left,
             visible: false
@@ -132,23 +133,23 @@ impl Constraint for AngularConstraint {
     }
 
     fn first_particle(&self) -> usize {
-        self.a
+        self.p
     }
 
     fn second_particle(&self) -> usize {
-        self.b
+        self.e
     }
 
     fn solve(&self, particles: &mut [Particle]) {
 
-        let i1 = particles[self.a].inv_mass;
-        let i2 = particles[self.b].inv_mass;
+        let i1 = particles[self.p].inv_mass;
+        let i2 = particles[self.e].inv_mass;
 
         if i1 + i2 > 0.0 {
 
-            let p1 = particles[self.a].position;
-            let p2 = particles[self.b].position;
-            let delta = p2 - p1;
+            let parent = particles[self.p].position;
+            let end = particles[self.e].position;
+            let delta = end - parent;
 
             // Fast inverse square root
             let dot = delta * delta;
@@ -158,13 +159,13 @@ impl Constraint for AngularConstraint {
             let delta_length = 1.0 / (y * (1.5 - (x2 * y * y)));
 
             // 1. Check that angle is actually smaller
-            // 2. Check that the that p2 is on matches
+            // 2. Check that the that end is on matches
             if delta_length < self.rest_length &&
-                self.is_left == p2.is_left(p1, particles[self.c].position) {
+                self.is_left == end.is_left(parent, particles[self.j].position) {
 
                 let diff = (delta_length - self.rest_length) / (delta_length * (i1 + i2));
-                particles[self.a].position = p1 + delta * i1 * diff;
-                particles[self.b].position = p2 - delta * i2 * diff;
+                particles[self.p].position = parent + delta * i1 * diff;
+                particles[self.e].position = end - delta * i2 * diff;
             }
 
         }
@@ -172,6 +173,7 @@ impl Constraint for AngularConstraint {
     }
 
 }
+
 
 
 // 2D Particle Abstraction ----------------------------------------------------

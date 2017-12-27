@@ -57,6 +57,10 @@ impl StickFigureState for PlayerState {
         self.velocity
     }
 
+    fn force(&self) -> Vec2 {
+        Vec2::new(-16.0, -31.0)
+    }
+
     fn direction(&self) -> f32 {
         self.direction
     }

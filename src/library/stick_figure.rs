@@ -33,9 +33,10 @@ lazy_static! {
 
     static ref DEFAULT_FIGURE_SKELETON: SkeletalData = SkeletalData {
         bones: vec![
-            (  "Root", ( "Root",  1.0, -D90, 0.00, 0.98)), // 0
+            // TODO collapse / remove bones with len == 1.0 in ragdoll constraints / points
+            (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
 
-            (  "Back", ( "Root", 16.0,  0.0, 0.00, 0.99)), // 1
+            (  "Back", ( "Root", 18.0,  0.0, 0.00, 0.99)), // 1
             (  "Head", ( "Back", 10.0,  0.0, 0.00, 0.99)), // 3
 
             ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 6
@@ -43,26 +44,28 @@ lazy_static! {
             ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 4
             ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 5
 
-            (  "Hip", ( "Root",   1.0,   PI, 0.00, 1.00)), // 8
+            (   "Hip", ( "Root",   0.0,   PI, 0.00, 1.00)), // 8
 
             ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 9
             ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 10
             ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 11
             ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 12
         ],
+        ragdoll_parents: vec![
+            // Skip hip during ragdolls
+            ("L.Leg", "Root"),
+            ("R.Leg", "Root")
+        ],
         constraints: vec![
-            SkeletalConstraint::Stick("Back", "L.Foot"),
-            SkeletalConstraint::Stick("Back", "R.Foot"),
-            SkeletalConstraint::Stick("Head", "Hip"),
+            SkeletalConstraint::Stick("Back", "L.Leg"),
+            SkeletalConstraint::Stick("Back", "R.Leg"),
+            // SkeletalConstraint::Stick("Head", "Root"),
 
-            // Back -> Head
-            SkeletalConstraint::Angular("Back", "Head", D45, D45),
-
-            // L.Leg -> L.Foot
-            SkeletalConstraint::Angular("L.Leg", "L.Foot", 0.0, D90 * 1.5),
-
-            // R.Leg -> R.Foot
-            SkeletalConstraint::Angular("R.Leg", "R.Foot", 0.0, D90 * 1.5)
+            SkeletalConstraint::Angular("Root", "Back", "Head", PI - D45, PI - D45),
+            // SkeletalConstraint::Angular("Root", "L.Leg", "L.Foot", PI, PI - D90 * 1.90),
+            // SkeletalConstraint::Angular("Root", "R.Leg", "R.Foot", PI, PI - D90 * 1.90),
+            // SkeletalConstraint::Angular("Root", "L.Arm", "L.Hand", PI, PI - D90 * 1.5),
+            // SkeletalConstraint::Angular("Root", "R.Arm", "R.Hand", PI, PI - D90 * 1.5)
 
         ]
 
@@ -262,6 +265,7 @@ pub trait StickFigureState {
     fn is_alive(&self) -> bool;
     fn position(&self) -> Vec2;
     fn velocity(&self) -> Vec2;
+    fn force(&self) -> Vec2;
     fn direction(&self) -> f32;
     fn is_grounded(&self) -> bool;
     fn is_crouching(&self) -> bool;
@@ -430,9 +434,7 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         if !self.state.is_alive() && !self.skeleton.has_ragdoll() {
 
             let facing = Angle::facing(self.state.direction() + D90).to_vec();
-
-            // TODO make external
-            let force = Vec2::new(-16.0, -31.0).scale(facing) + self.state.velocity();
+            let force = self.state.force().scale(facing) + self.state.velocity();
 
             // Update weapon model to support ragdoll
             for accessory in self.accessories.values_mut() {

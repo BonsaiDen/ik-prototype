@@ -21,7 +21,7 @@ use super::{Constraint, AngularConstraint, StickConstraint, Particle, ParticleLi
 // Types ----------------------------------------------------------------------
 pub enum SkeletalConstraint {
     Stick(&'static str, &'static str),
-    Angular(&'static str, &'static str, f32, f32)
+    Angular(&'static str, &'static str, &'static str, f32, f32),
 }
 
 type SkeletalBoneDescription = (
@@ -29,11 +29,13 @@ type SkeletalBoneDescription = (
     &'static str, f32, f32, f32, f32
 );
 type SkeletalBone = (&'static str, SkeletalBoneDescription);
+type RagdollBoneLink = (&'static str, &'static str);
 
 
 // Skeleton Data Abstraction --------------------------------------------------
 pub struct SkeletalData {
     pub bones: Vec<SkeletalBone>,
+    pub ragdoll_parents: Vec<RagdollBoneLink>,
     pub constraints: Vec<SkeletalConstraint>
 }
 
@@ -55,9 +57,23 @@ impl SkeletalData {
                 }
             }
 
+            // Find ragdoll parent overrides
+            let mut ragdoll_parent = parent;
+            for &(name, parent) in &self.ragdoll_parents {
+                if name == bone.0 {
+                    for (i, p) in self.bones.iter().enumerate() {
+                        if p.0 == parent {
+                            ragdoll_parent = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
             Bone {
                 index: index,
                 parent: parent,
+                ragdoll_parent: ragdoll_parent,
                 children: Vec::new(),
 
                 tmp_update_angle: 0.0,
@@ -235,43 +251,41 @@ impl Skeleton {
                         Box::new(StickConstraint::new(parent, child, (ap - bp).len()))
                     );
                 },
-                SkeletalConstraint::Angular(joint, bone, left, right) => {
-
-                    let parent = self.get_bone(joint).unwrap().parent().unwrap();
+                SkeletalConstraint::Angular(parent, joint, child, left, right) => {
+                    let parent = self.get_bone(parent).unwrap().index();
                     let joint = self.get_bone(joint).unwrap().index();
-                    let bone = self.get_bone(bone).unwrap().index();
-
-                    let a = self.get_bone_index(parent).length();
-                    let b = self.get_bone_index(bone).length();
-
-                    // Fixed
-                    if left == right {
-                        let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
-                        self.constraints.push(
-                            Box::new(StickConstraint::new(parent, bone, rest_length))
-                        );
-
-                    // Variable
-                    } else {
-
-
-                        let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
-                        self.constraints.push(
-                            Box::new(AngularConstraint::new(parent, bone, joint, rest_length, true))
-                        );
-
-                        let rest_length = (a * a + b * b - 2.0 * a * b * right.cos()).sqrt();
-                        self.constraints.push(
-                            Box::new(AngularConstraint::new(parent, bone, joint, rest_length, false))
-                        );
-
-                    }
-
+                    let child = self.get_bone(child).unwrap().index();
+                    self.add_angular_constraint(parent, joint, child, left, right);
                 }
             }
         }
 
         self.ragdoll_steps_until_rest = 10;
+
+    }
+
+    fn add_angular_constraint(&mut self, parent: usize, joint: usize, child: usize, left: f32, right: f32) {
+
+        let (left, right) = if self.local_transform.x.signum() == -1.0 {
+            (right, left)
+
+        } else {
+            (left, right)
+        };
+
+        let o = self.get_bone_index(parent).length();
+        let a = self.get_bone_index(child).length();
+        let b = self.get_bone_index(joint).length();
+
+        let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
+        self.constraints.push(
+            Box::new(AngularConstraint::new(parent, child, joint, rest_length, true))
+        );
+
+        let rest_length = (a * a + b * b - 2.0 * a * b * right.cos()).sqrt();
+        self.constraints.push(
+            Box::new(AngularConstraint::new(parent, child, joint, rest_length, false))
+        );
 
     }
 
@@ -344,7 +358,7 @@ impl Skeleton {
                 ParticleSystem::accumulate_forces(gravity, &mut self.particles[..]);
                 ParticleSystem::verlet(dt, &mut self.particles[..]);
                 if !ParticleSystem::satisfy_constraints(
-                    3,
+                    1,
                     &mut self.particles[..],
                     &self.constraints[..],
                     &mut self.bounds,
@@ -730,6 +744,7 @@ impl ParticleSystemLike for Skeleton {
 pub struct Bone {
     index: usize,
     parent: usize,
+    ragdoll_parent: usize,
     children: Vec<usize>,
 
     tmp_update_angle: f32,
@@ -750,8 +765,8 @@ pub struct Bone {
 impl ParticleLike for Bone {
 
     fn to_constaint(&self) -> Option<Box<Constraint>> {
-        if self.parent != 255 {
-            Some(Box::new(StickConstraint::new(self.index, self.parent, self.length())))
+        if self.ragdoll_parent != 255 {
+            Some(Box::new(StickConstraint::new(self.index, self.ragdoll_parent, self.length())))
 
         } else {
             None
@@ -772,6 +787,15 @@ impl Bone {
 
     pub fn index(&self) -> usize {
         self.index
+    }
+
+    pub fn ragdoll_parent(&self) -> Option<usize> {
+        if self.ragdoll_parent != 255 {
+            Some(self.ragdoll_parent)
+
+        } else {
+            None
+        }
     }
 
     pub fn parent(&self) -> Option<usize> {
