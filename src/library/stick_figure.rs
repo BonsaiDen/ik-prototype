@@ -33,7 +33,6 @@ lazy_static! {
 
     static ref DEFAULT_FIGURE_SKELETON: SkeletalData = SkeletalData {
         bones: vec![
-            // TODO collapse / remove bones with len == 1.0 in ragdoll constraints / points
             (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
 
             (  "Back", ( "Root", 18.0,  0.0, 0.00, 0.99)), // 1
@@ -46,10 +45,10 @@ lazy_static! {
 
             (   "Hip", ( "Root",   0.0,   PI, 0.00, 1.00)), // 7
 
+            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 10
+            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)), // 11
             ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 8
             ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 9
-            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 10
-            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 11
         ],
         ragdoll_parents: vec![
             // Skip hip during ragdolls
@@ -568,7 +567,7 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
                 end + world_offset
             );
 
-            if name == "R.Arm" || name == "R.Hand" || name == "L.Leg" || name == "L.Foot" {
+            if name == "R.Arm" || name == "R.Hand" || name == "R.Leg" || name == "R.Foot" {
                 renderer.draw_line(line.0, line.1, 0x0080_8080);
 
             } else if name != "Root" && name != "Head" {

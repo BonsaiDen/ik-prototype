@@ -85,9 +85,6 @@ impl SkeletalData {
                 start: Vec2::zero(),
                 end: Vec2::zero(),
 
-                world_position: Vec2::zero(),
-                local_transform: Vec2::new(1.0, 1.0),
-
                 data: bone
             }
 
@@ -367,7 +364,12 @@ impl Skeleton {
             // Update all bones relative to their parents
             for i in &self.child_last_indices {
                 let values = self.calculate_bone(*i);
-                self.bones[*i].set(values);
+                let mut bone = &mut self.bones[*i];
+                self.bounds.0.x = self.bounds.0.x.min(bone.start.x).min(bone.end.x);
+                self.bounds.0.y = self.bounds.0.y.min(bone.start.y).min(bone.end.y);
+                self.bounds.1.x = self.bounds.1.x.max(bone.start.x).max(bone.end.x);
+                self.bounds.1.y = self.bounds.1.y.max(bone.start.y).max(bone.end.y);
+                bone.set(values);
             }
 
         }
@@ -511,19 +513,6 @@ impl Skeleton {
             };
 
             for i in sequence {
-                {
-                    let b = &mut self.bones[*i];
-
-                    // TODO still needed?
-                    b.world_position = self.world_position;
-                    b.local_transform = self.local_transform;
-
-                    self.bounds.0.x = self.bounds.0.x.min(b.start.x).min(b.end.x);
-                    self.bounds.0.y = self.bounds.0.y.min(b.start.y).min(b.end.y);
-                    self.bounds.1.x = self.bounds.1.x.max(b.start.x).max(b.end.x);
-                    self.bounds.1.y = self.bounds.1.y.max(b.start.y).max(b.end.y);
-
-                }
                 let bone = &self.bones[*i];
                 let start = bone.start_local().scale(self.local_transform);
                 let end = bone.end_local().scale(self.local_transform);
@@ -551,7 +540,7 @@ impl Skeleton {
 
     fn get_particles(&self) -> Vec<Particle> {
         self.bones.iter().map(|bone| {
-            bone.to_particle()
+            bone.to_particle(self.local_transform)
 
         }).collect()
     }
@@ -643,10 +632,6 @@ pub struct Bone {
     start: Vec2, // parent.end
     end: Vec2,
 
-    // Note: Only updated in skeleton visit_*() methods
-    world_position: Vec2,
-    local_transform: Vec2,
-
     data: &'static SkeletalBone
 }
 
@@ -660,36 +645,6 @@ impl Bone {
         self.index
     }
 
-    pub fn ragdoll_parent(&self) -> Option<usize> {
-        if self.ragdoll_parent != 255 {
-            Some(self.ragdoll_parent)
-
-        } else {
-            None
-        }
-    }
-
-    pub fn parent(&self) -> Option<usize> {
-        if self.parent != 255 {
-            Some(self.parent)
-
-        } else {
-            None
-        }
-    }
-
-    pub fn start_local(&self) -> Vec2 {
-        self.start
-    }
-
-    pub fn end_local(&self) -> Vec2 {
-        self.end
-    }
-
-    pub fn transform(&self, p: Vec2) -> Vec2 {
-        p.scale(self.local_transform)
-    }
-
     pub fn length(&self) -> f32 {
         (self.data.1).1
     }
@@ -697,12 +652,6 @@ impl Bone {
     pub fn set_user_angle(&mut self, r: f32) {
         self.user_angle = r;
     }
-
-    pub fn set_from_ragdoll(&mut self, start: Vec2, end: Vec2) {
-        self.start = start;
-        self.set_end(end);
-    }
-
 
     // Internal ---------------------------------------------------------------
     fn to_constaint(&self) -> Option<(String, Box<Constraint>)> {
@@ -716,8 +665,8 @@ impl Bone {
         }
     }
 
-    fn to_particle(&self) -> Particle {
-        Particle::with_inv_mass(self.transform(self.end_local()), (self.data.1).4)
+    fn to_particle(&self, transform: Vec2) -> Particle {
+        Particle::with_inv_mass(self.end_local().scale(transform), (self.data.1).4)
     }
 
     fn set(&mut self, values: (f32, Vec2, Vec2)) {
@@ -728,6 +677,14 @@ impl Bone {
 
     fn set_end(&mut self, p: Vec2) {
         self.end = p;
+    }
+
+    fn start_local(&self) -> Vec2 {
+        self.start
+    }
+
+    fn end_local(&self) -> Vec2 {
+        self.end
     }
 
 }
