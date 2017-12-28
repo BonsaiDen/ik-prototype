@@ -57,7 +57,7 @@ impl RigidBody {
 
             let mut constraint = StickConstraint::new(a.1, b.1, l);
             if c.2 {
-                constraint.set_visible(true);
+                constraint.set_visual(true);
             }
             lines.push((a, b, c.2));
             particles.add_constraint(constraint);

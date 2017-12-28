@@ -23,11 +23,14 @@ pub use self::animation::{Animation, AnimationData};
 
 mod particle;
 pub use self::particle::{
-    Constraint, AngularConstraint, StickConstraint,
-    Particle, ParticleLike, ParticleSystem, ParticleSystemLike, ParticleTemplate
+    Constraint, ConstraintType, AngularConstraint, StickConstraint,
+    Particle, ParticleSystem, ParticleTemplate
 };
 
 pub mod library;
+
+mod ragdoll;
+pub use self::ragdoll::Ragdoll;
 
 mod rigid_body;
 pub use self::rigid_body::{RigidBodyData, RigidBody};

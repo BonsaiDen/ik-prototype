@@ -37,19 +37,19 @@ lazy_static! {
             (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
 
             (  "Back", ( "Root", 18.0,  0.0, 0.00, 0.99)), // 1
-            (  "Head", ( "Back", 10.0,  0.0, 0.00, 0.99)), // 3
+            (  "Head", ( "Back", 10.0,  0.0, 0.00, 0.99)), // 2
 
-            ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 6
-            ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 7
-            ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 4
-            ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 5
+            ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 3
+            ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 4
+            ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 5
+            ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 6
 
-            (   "Hip", ( "Root",   0.0,   PI, 0.00, 1.00)), // 8
+            (   "Hip", ( "Root",   0.0,   PI, 0.00, 1.00)), // 7
 
-            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 9
-            ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 10
-            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 11
-            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 12
+            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 8
+            ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 9
+            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 10
+            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)) // 11
         ],
         ragdoll_parents: vec![
             // Skip hip during ragdolls
@@ -74,7 +74,7 @@ lazy_static! {
 
     static ref IDLE_ANIMATION: AnimationData = AnimationData {
         name: "Idle",
-        duration: 1.25 * 0.2,
+        duration: 1.25,
         key_frames: vec![
             // Pose
             (0.0, vec![
@@ -89,7 +89,7 @@ lazy_static! {
                 ("L.Hand",  -D45 * 1.65)
             ]),
             // Matches the idle compression
-            (1.25 * 0.5 * 0.2, vec![
+            (1.25 * 0.5, vec![
                 ( "L.Leg", -D22),
                 ("L.Foot",  0.0),
                 ( "R.Leg",  D22),
@@ -413,16 +413,20 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
 
 
     // Getters ----------------------------------------------------------------
-    pub fn at_rest(&self) -> bool {
-        self.skeleton.at_rest()
-    }
-
     pub fn world_bounds(&self) -> (Vec2, Vec2) {
         self.skeleton.world_bounds()
     }
 
     pub fn world_offset(&self) -> Vec2 {
         self.skeleton.world_offset()
+    }
+
+    pub fn skeleton(&self) -> &Skeleton {
+        &self.skeleton
+    }
+
+    pub fn skeleton_mut(&mut self) -> &mut Skeleton {
+        &mut self.skeleton
     }
 
 
@@ -504,7 +508,8 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
             }
 
         } else {
-            self.skeleton.set_animation(&IDLE_ANIMATION, 1.25 / self.config.idle_speed, 0.1);
+            // TODO add in idle speed for multiplication
+            self.skeleton.set_animation(&IDLE_ANIMATION, 1.0, 0.1);
         }
 
         // Offsets
@@ -556,14 +561,13 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         }
 
         // Draw bones
-        self.skeleton.visit(|bone| {
+        self.skeleton.visit(|start, end, name| {
 
             let line = (
-                bone.start_world(),
-                bone.end_world()
+                start + world_offset,
+                end + world_offset
             );
 
-            let name = bone.name();
             if name == "R.Arm" || name == "R.Hand" || name == "L.Leg" || name == "L.Foot" {
                 renderer.draw_line(line.0, line.1, 0x0080_8080);
 

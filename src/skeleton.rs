@@ -15,7 +15,11 @@ use std::collections::HashMap;
 // Internal Dependencies ------------------------------------------------------
 use super::{Angle, Vec2};
 use super::animation::{AnimationFrameBone, AnimationData, AnimationBlender};
-use super::{Constraint, AngularConstraint, StickConstraint, Particle, ParticleLike, ParticleSystemLike, ParticleSystem};
+use super::{
+    Constraint, ConstraintType, AngularConstraint, StickConstraint,
+    Ragdoll,
+    Particle, ParticleSystem
+};
 
 
 // Types ----------------------------------------------------------------------
@@ -72,6 +76,7 @@ impl SkeletalData {
 
             Bone {
                 index: index,
+                particle_index: index,
                 parent: parent,
                 ragdoll_parent: ragdoll_parent,
                 children: Vec::new(),
@@ -237,7 +242,7 @@ impl Skeleton {
 
         self.ragdoll_active = true;
         self.particles = self.get_particles();
-        self.constraints = self.get_constraints();
+        self.constraints = self.get_constraints().into_iter().map(|c| c.1).collect();
 
         // Additional skeletal constraints
         for constraint in &self.data.constraints {
@@ -260,35 +265,15 @@ impl Skeleton {
             }
         }
 
+        // let r = Ragdoll::new(&self);
+
+
         self.ragdoll_steps_until_rest = 10;
 
     }
 
-    fn add_angular_constraint(&mut self, parent: usize, joint: usize, child: usize, left: f32, right: f32) {
 
-        let (left, right) = if self.local_transform.x.signum() == -1.0 {
-            (right, left)
-
-        } else {
-            (left, right)
-        };
-
-        let a = self.get_bone_index(child).length();
-        let b = self.get_bone_index(joint).length();
-
-        let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
-        self.constraints.push(
-            Box::new(AngularConstraint::new(parent, child, joint, rest_length, true))
-        );
-
-        let rest_length = (a * a + b * b - 2.0 * a * b * right.cos()).sqrt();
-        self.constraints.push(
-            Box::new(AngularConstraint::new(parent, child, joint, rest_length, false))
-        );
-
-    }
-
-    pub fn stop_ragdoll( &mut self) {
+    pub fn stop_ragdoll(&mut self) {
         self.ragdoll_active = false;
         self.particles.clear();
         self.constraints.clear();
@@ -369,10 +354,15 @@ impl Skeleton {
                 // Re-apply bone modifications
                 for i in &self.child_last_indices{
                     if let Some(parent) = self.bones[*i].parent() {
-                        let index = self.bones[*i].index();
-                        let start = self.bones[*i].transform(self.particles[parent].position);
+
+                        let parent_index = self.bones[parent].particle_index();
+                        let index = self.bones[*i].particle_index();
+
+                        let start = self.bones[*i].transform(self.particles[parent_index].position);
                         let end = self.bones[*i].transform(self.particles[index].position);
+
                         self.bones[*i].set_from_ragdoll(start, end);
+
                     }
                 }
 
@@ -386,8 +376,11 @@ impl Skeleton {
             self.bounds.1.x = -10000.0;
             self.bounds.1.y = -10000.0;
 
+            // Reset animation rest angles
+            self.data.reset_animation_bones(&mut self.bone_rest_angles[..]);
+
             // Forward animations and calculate animation bone angles
-            self.animate(dt);
+            self.animation.update(dt, &mut self.bone_rest_angles[..]);
 
             // Reset all bones to the base skeleton angles
             for i in &self.child_last_indices {
@@ -502,16 +495,6 @@ impl Skeleton {
 
 
     // Updating & Animation ---------------------------------------------------
-    fn animate(&mut self, dt: f32) {
-
-        // Reset animation rest angles
-        self.data.reset_animation_bones(&mut self.bone_rest_angles[..]);
-
-        // Apply animations to rest angles
-        self.animation.update(dt, &mut self.bone_rest_angles[..]);
-
-    }
-
     pub fn set_animation(
         &mut self,
         data: &'static AnimationData,
@@ -579,7 +562,8 @@ impl Skeleton {
         &self.bones[index]
     }
 
-    pub fn visit<C: FnMut(&Bone)>(&mut self, mut callback: C, children_first: bool) {
+    // TODO update callback to be more generic
+    pub fn visit<C: FnMut(Vec2, Vec2, &str)>(&mut self, mut callback: C, children_first: bool) {
 
         let sequence = if children_first {
             &self.child_first_indices
@@ -602,7 +586,10 @@ impl Skeleton {
                 }
 
             }
-            callback(&self.bones[*i]);
+            let bone = &self.bones[*i];
+            let start = bone.start_local().scale(self.local_transform);
+            let end = bone.end_local().scale(self.local_transform);
+            callback(start, end, bone.name());
         }
 
     }
@@ -659,6 +646,45 @@ impl Skeleton {
 
 
     // Internal ---------------------------------------------------------------
+    fn get_particles(&self) -> Vec<Particle> {
+        self.bones.iter().map(|bone| {
+            bone.to_particle()
+
+        }).collect()
+    }
+
+    fn get_constraints(&self) -> Vec<(String, Box<Constraint>)> {
+        self.bones.iter().filter_map(|bone| {
+            bone.to_constaint()
+
+        }).collect()
+    }
+
+    fn add_angular_constraint(&mut self, parent: usize, joint: usize, child: usize, left: f32, right: f32) {
+
+        let (left, right) = if self.local_transform.x.signum() == -1.0 {
+            (right, left)
+
+        } else {
+            (left, right)
+        };
+
+        let a = self.get_bone_index(child).length();
+        let b = self.get_bone_index(joint).length();
+
+        let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
+        self.constraints.push(
+            Box::new(AngularConstraint::new(parent, child, joint, rest_length, true))
+        );
+
+        let rest_length = (a * a + b * b - 2.0 * a * b * right.cos()).sqrt();
+        self.constraints.push(
+            Box::new(AngularConstraint::new(parent, child, joint, rest_length, false))
+        );
+
+    }
+
+
     fn visit_bones<C: FnMut(&Bone)>(
         bones: &[Bone],
         indices: &[usize],
@@ -723,29 +749,12 @@ impl Skeleton {
 
 }
 
-impl ParticleSystemLike for Skeleton {
-
-    fn get_particles(&self) -> Vec<Particle> {
-        self.bones.iter().map(|bone| {
-            bone.to_particle()
-
-        }).collect()
-    }
-
-    fn get_constraints(&self) -> Vec<Box<Constraint>> {
-        self.bones.iter().filter_map(|bone| {
-            bone.to_constaint()
-
-        }).collect()
-    }
-
-}
-
 
 // Bone Abstraction -----------------------------------------------------------
 #[derive(Debug)]
 pub struct Bone {
     index: usize,
+    particle_index: usize,
     parent: usize,
     ragdoll_parent: usize,
     children: Vec<usize>,
@@ -764,24 +773,6 @@ pub struct Bone {
     data: &'static SkeletalBone
 }
 
-
-impl ParticleLike for Bone {
-
-    fn to_constaint(&self) -> Option<Box<Constraint>> {
-        if self.ragdoll_parent != 255 {
-            Some(Box::new(StickConstraint::new(self.index, self.ragdoll_parent, self.length())))
-
-        } else {
-            None
-        }
-    }
-
-    fn to_particle(&self) -> Particle {
-        Particle::with_inv_mass(self.transform(self.end_local()), (self.data.1).4)
-    }
-
-}
-
 impl Bone {
 
     pub fn name(&self) -> &'static str {
@@ -790,6 +781,10 @@ impl Bone {
 
     pub fn index(&self) -> usize {
         self.index
+    }
+
+    pub fn particle_index(&self) -> usize {
+        self.particle_index
     }
 
     pub fn ragdoll_parent(&self) -> Option<usize> {
@@ -814,17 +809,17 @@ impl Bone {
         self.start
     }
 
-    pub fn start_world(&self) -> Vec2 {
-        self.start.scale(self.local_transform) + self.world_position
-    }
+    // pub fn start_world(&self) -> Vec2 {
+    //     self.start.scale(self.local_transform) + self.world_position
+    // }
 
     pub fn end_local(&self) -> Vec2 {
         self.end
     }
 
-    pub fn end_world(&self) -> Vec2 {
-        self.end_local().scale(self.local_transform) + self.world_position
-    }
+    // pub fn end_world(&self) -> Vec2 {
+    //     self.end_local().scale(self.local_transform) + self.world_position
+    // }
 
     pub fn transform(&self, p: Vec2) -> Vec2 {
         p.scale(self.local_transform)
@@ -845,6 +840,21 @@ impl Bone {
 
 
     // Internal ---------------------------------------------------------------
+    fn to_constaint(&self) -> Option<(String, Box<Constraint>)> {
+        if self.ragdoll_parent != 255 {
+            let mut c = StickConstraint::new(self.index, self.ragdoll_parent, self.length());
+            c.set_visual(true);
+            Some((self.name().to_string(), Box::new(c)))
+
+        } else {
+            None
+        }
+    }
+
+    fn to_particle(&self) -> Particle {
+        Particle::with_inv_mass(self.transform(self.end_local()), (self.data.1).4)
+    }
+
     fn set(&mut self, values: (f32, Vec2, Vec2)) {
         self.tmp_update_angle = values.0;
         self.start = values.1;

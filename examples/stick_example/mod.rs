@@ -7,12 +7,14 @@
 // except according to those terms.
 
 
-// Internal Dependencies ------------------------------------------------------
+// External Dependencies ------------------------------------------------------
 use lean::Vec2;
 use lean::library::{
     Collider, StickFigure, StickFigureConfig, Scarf, Weapon, Renderer
 };
 
+
+// Internal Dependencies ------------------------------------------------------
 use super::Context;
 
 
@@ -35,24 +37,10 @@ impl Level {
 
 }
 
-pub struct LevelCollider {
-    width: f32,
-    floor: f32
-}
-
-impl LevelCollider {
-    fn from_level(level: &Level) -> Self {
-        Self {
-            width: level.width,
-            floor: level.floor
-        }
-    }
-}
-
-impl Collider for LevelCollider {
+impl Collider for Level {
 
     fn world(&self, mut p: Vec2) -> Option<(Vec2, i32, i32)> {
-        let floor = self.floor - p.x * 0.125;
+        let floor = self.floor;
         if p.y > floor {
             p.y = p.y.min(floor);
             Some((p, 0, 1))
@@ -74,7 +62,7 @@ impl Collider for LevelCollider {
 
 pub struct Example {
     player: Player,
-    figure: StickFigure<PlayerState, Context, LevelCollider>,
+    figure: StickFigure<PlayerState, Context, Level>,
     level: Level,
     show_bounds: bool,
     input_direction: f32
@@ -181,24 +169,20 @@ impl Example {
             self.show_bounds = !self.show_bounds;
         }
 
-        let collider = LevelCollider::from_level(&self.level);
         self.player.update_server(fire);
-        self.player.update_shared(left, right, crouch, jump, self.input_direction, &collider);
+        self.player.update_shared(left, right, crouch, jump, self.input_direction, &self.level);
 
     }
 
     pub fn draw(&mut self, context: &mut Context) {
 
         self.figure.set_state(self.player.get_state());
-
-
-        let collider = LevelCollider::from_level(&self.level);
-        self.figure.draw(context, &collider);
+        self.figure.draw(context, &self.level);
         self.level.draw(context);
 
         if self.show_bounds {
             let b = self.figure.world_bounds();
-            context.draw_rect(b.0, b.1, if self.figure.at_rest() { 0x0000_c0f0 } else { 0x00ff_0000 });
+            context.draw_rect(b.0, b.1, if self.figure.skeleton().at_rest() { 0x0000_c0f0 } else { 0x00ff_0000 });
         }
 
     }

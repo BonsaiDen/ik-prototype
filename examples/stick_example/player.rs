@@ -14,7 +14,6 @@ use std::f32::consts::PI;
 // Internal Dependencies ------------------------------------------------------
 use lean::{Angle, Vec2, f32_equals};
 use lean::library::{StickFigureConfig, StickFigureState, Collider};
-use super::LevelCollider;
 
 
 // Payer Logic ----------------------------------------------------------------
@@ -120,14 +119,14 @@ impl Player {
         }
     }
 
-    pub fn update_shared(
+    pub fn update_shared<R: Collider>(
         &mut self,
         left: bool,
         right: bool,
         crouch: bool,
         jump: bool,
         direction: f32,
-        collider: &LevelCollider
+        collider: &R
     ) {
 
         // Movement

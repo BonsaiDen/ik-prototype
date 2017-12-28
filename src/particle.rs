@@ -12,31 +12,29 @@ use super::Vec2;
 
 
 // Traits ---------------------------------------------------------------------
+#[derive(Debug, Eq, PartialEq)]
+pub enum ConstraintType {
+    Stick,
+    Angular
+}
+
 pub trait Constraint {
+    fn typ(&self) -> ConstraintType;
     fn first_particle(&self) -> usize;
     fn second_particle(&self) -> usize;
     fn solve(&self, &mut [Particle]) {}
-    fn visible(&self) -> bool {
+    fn visual(&self) -> bool {
         false
     }
 }
 
-pub trait ParticleSystemLike {
-    fn get_particles(&self) -> Vec<Particle>;
-    fn get_constraints(&self) -> Vec<Box<Constraint>>;
-}
-
-pub trait ParticleLike {
-    fn to_constaint(&self) -> Option<Box<Constraint>> where Self: Sized;
-    fn to_particle(&self) -> Particle where Self: Sized;
-}
 
 // 2D Particles Constraints ---------------------------------------------------
 pub struct StickConstraint {
     a: usize,
     b: usize,
     rest_length: f32,
-    visible: bool
+    visual: bool
 }
 
 impl StickConstraint {
@@ -46,20 +44,24 @@ impl StickConstraint {
             a,
             b,
             rest_length,
-            visible: false
+            visual: false
         }
     }
 
-    pub fn set_visible(&mut self, visual: bool) {
-        self.visible = visual;
+    pub fn set_visual(&mut self, visual: bool) {
+        self.visual = visual;
     }
 
 }
 
 impl Constraint for StickConstraint {
 
-    fn visible(&self) -> bool {
-        self.visible
+    fn typ(&self) -> ConstraintType {
+        ConstraintType::Stick
+    }
+
+    fn visual(&self) -> bool {
+        self.visual
     }
 
     fn first_particle(&self) -> usize {
@@ -104,7 +106,7 @@ pub struct AngularConstraint {
     j: usize,
     rest_length: f32,
     is_left: bool,
-    visible: bool
+    visual: bool
 }
 
 impl AngularConstraint {
@@ -116,28 +118,32 @@ impl AngularConstraint {
             j,
             rest_length,
             is_left,
-            visible: false
+            visual: false
         }
     }
 
-    pub fn set_visible(&mut self, visual: bool) {
-        self.visible = visual;
+    pub fn set_visual(&mut self, visual: bool) {
+        self.visual = visual;
     }
 
 }
 
 impl Constraint for AngularConstraint {
 
-    fn visible(&self) -> bool {
-        self.visible
+    fn typ(&self) -> ConstraintType {
+        ConstraintType::Angular
+    }
+
+    fn visual(&self) -> bool {
+        self.visual
     }
 
     fn first_particle(&self) -> usize {
-        self.p
+        self.e
     }
 
     fn second_particle(&self) -> usize {
-        self.e
+        self.j
     }
 
     fn solve(&self, particles: &mut [Particle]) {
@@ -272,15 +278,6 @@ impl ParticleSystem {
 
     }
 
-    /*
-    pub fn from<T: ParticleSystemLike>(system_like: &T, iterations: usize) -> ParticleSystem {
-        Self {
-            particles: system_like.get_particles(),
-            constraints: system_like.get_constraints(),
-            iterations,
-            activity: 10
-        }
-    }*/
 
     // Getters ----------------------------------------------------------------
     pub fn active(&self) -> bool {
@@ -351,7 +348,7 @@ impl ParticleSystem {
             callback(
                 (constraint.first_particle(), a),
                 (constraint.second_particle(), b),
-                constraint.visible()
+                constraint.visual()
             );
         }
     }
