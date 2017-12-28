@@ -88,7 +88,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Scarf {
             renderer.dt(),
             Vec2::new(-200.0 * self.facing.x, (renderer.time() * 4.0).sin() * self.gravity.y * 0.5),
             |p| {
-                if let Some(pos) = collider.world(p.position + world_offset) {
+                if let Some((pos, _, _)) = collider.world(p.position + world_offset) {
                     p.position = pos - world_offset;
                 }
             }

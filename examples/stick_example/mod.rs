@@ -36,27 +36,34 @@ impl Level {
 }
 
 pub struct LevelCollider {
-    floor_local: Vec2,
-    floor_world: Vec2
+    width: f32,
+    floor: f32
 }
 
 impl LevelCollider {
-    fn from_level(level: &Level, offset: Vec2) -> Self {
-        let floor_world = Vec2::new(0.0, level.floor);
+    fn from_level(level: &Level) -> Self {
         Self {
-            floor_world: floor_world,
-            floor_local: floor_world - offset
+            width: level.width,
+            floor: level.floor
         }
     }
 }
 
 impl Collider for LevelCollider {
 
-    fn world(&self, mut p: Vec2) -> Option<Vec2> {
-        let max = self.floor_world.y;
-        if p.y > max {
-            p.y = p.y.min(max);
-            Some(p)
+    fn world(&self, mut p: Vec2) -> Option<(Vec2, i32, i32)> {
+        let floor = self.floor - p.x * 0.125;
+        if p.y > floor {
+            p.y = p.y.min(floor);
+            Some((p, 0, 1))
+
+        } else if p.x < 0.0 {
+            p.x = p.x.max(0.0);
+            Some((p, -1, 0))
+
+        } else if p.x > self.width  {
+            p.x = p.x.min(self.width);
+            Some((p, 1, 0))
 
         } else {
             None
@@ -174,8 +181,9 @@ impl Example {
             self.show_bounds = !self.show_bounds;
         }
 
+        let collider = LevelCollider::from_level(&self.level);
         self.player.update_server(fire);
-        self.player.update_shared(left, right, crouch, jump, self.input_direction, &self.level);
+        self.player.update_shared(left, right, crouch, jump, self.input_direction, &collider);
 
     }
 
@@ -184,7 +192,7 @@ impl Example {
         self.figure.set_state(self.player.get_state());
 
 
-        let collider = LevelCollider::from_level(&self.level, self.figure.world_offset());
+        let collider = LevelCollider::from_level(&self.level);
         self.figure.draw(context, &collider);
         self.level.draw(context);
 

@@ -525,9 +525,9 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         // Animate and Arrange
         let world_offset = self.skeleton.world_offset();
         self.skeleton.step(dt, Vec2::new(0.0, self.config.fall_limit * 100.0), |p| {
-            if let Some(pos) = collider.world(p.position + world_offset) {
+            if let Some((pos, _, vertical)) = collider.world(p.position + world_offset) {
                 p.position = pos - world_offset;
-                if ragdoll_timer > 1.0 {
+                if ragdoll_timer > 1.0 && vertical == 1 {
                     p.set_invmass(0.5);
                 }
             }
@@ -537,21 +537,21 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         for accessory in self.accessories.values() {
             if let Some(iks) = accessory.get_iks(&self.skeleton) {
                 for (bone, p, positive) in iks {
-                    self.skeleton.apply_ik(bone, p, positive);
+                    self.skeleton.apply_ik(bone, p, positive, false);
                 }
             }
         }
 
         // Leg IKs
         if self.state.is_grounded() {
-            let foot_l = self.skeleton.get_bone_end_ik("L.Foot");
-            if let Some(p) = collider.world(foot_l + world_offset) {
-                self.skeleton.apply_ik("L.Foot", p - world_offset, false);
+            let foot_l = self.skeleton.get_bone_end_local("L.Foot");
+            if let Some((p, _, _)) = collider.world(foot_l + world_offset) {
+                self.skeleton.apply_ik("L.Foot", p - world_offset, false, true);
             }
 
-            let foot_r = self.skeleton.get_bone_end_ik("R.Foot");
-            if let Some(p) = collider.world(foot_r + world_offset) {
-                self.skeleton.apply_ik("R.Foot", p - world_offset, false);
+            let foot_r = self.skeleton.get_bone_end_local("R.Foot");
+            if let Some((p, _, _)) = collider.world(foot_r + world_offset) {
+                self.skeleton.apply_ik("R.Foot", p - world_offset, false, true);
             }
         }
 

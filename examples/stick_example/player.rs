@@ -13,8 +13,8 @@ use std::f32::consts::PI;
 
 // Internal Dependencies ------------------------------------------------------
 use lean::{Angle, Vec2, f32_equals};
-use lean::library::{StickFigureConfig, StickFigureState};
-use super::Level;
+use lean::library::{StickFigureConfig, StickFigureState, Collider};
+use super::LevelCollider;
 
 
 // Payer Logic ----------------------------------------------------------------
@@ -127,7 +127,7 @@ impl Player {
         crouch: bool,
         jump: bool,
         direction: f32,
-        level: &Level
+        collider: &LevelCollider
     ) {
 
         // Movement
@@ -176,7 +176,23 @@ impl Player {
         self.state.position.y += self.state.velocity.y;
 
         // Collision
-        self.collide_with_level(level);
+        if let Some((p, _, vertical)) = collider.world(self.state.position) {
+
+            let d = self.state.position - p;
+            if d.x.abs() > 0.0 {
+                self.state.velocity.x = 0.0;
+            }
+
+            if d.y.abs() > 0.0 {
+                self.state.velocity.y = 0.0;
+                if vertical == 1 {
+                    self.state.is_grounded = true;
+                }
+            }
+
+            self.state.position = p;
+
+        }
 
         // Aiming
         self.state.direction = Angle::interpolate(self.state.direction, direction, PI * 0.1);
@@ -186,26 +202,6 @@ impl Player {
     pub fn compute_view_angle(&self, at: Vec2) -> f32 {
         let shoulder_height = self.config.shoulder_height;
         (at - self.state.position + Vec2::new(0.0, shoulder_height) - self.config.offset).angle()
-    }
-
-    fn collide_with_level(&mut self, level: &Level) {
-
-        if self.state.position.x < 0.0 {
-            self.state.position.x = 0.0;
-            self.state.velocity.x = 0.0;
-        }
-
-        if self.state.position.x > level.width {
-            self.state.position.x = level.width;
-            self.state.velocity.x = 0.0;
-        }
-
-        if self.state.position.y > level.floor {
-            self.state.position.y = level.floor;
-            self.state.velocity.y = 0.0;
-            self.state.is_grounded = true;
-        }
-
     }
 
 }

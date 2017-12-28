@@ -37,7 +37,7 @@ pub trait Renderer {
 }
 
 pub trait Collider {
-    fn world(&self, Vec2) -> Option<Vec2>;
+    fn world(&self, Vec2) -> Option<(Vec2, i32, i32)>;
 }
 
 pub trait Accessory<R: Renderer, C: Collider>: Downcast {

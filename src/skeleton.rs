@@ -406,10 +406,14 @@ impl Skeleton {
 
     }
 
-    pub fn apply_ik(&mut self, name: &'static str, target: Vec2, positive: bool) {
+    pub fn apply_ik(&mut self, name: &'static str, mut target: Vec2, positive: bool, transformed: bool) {
 
         if self.ragdoll_active {
             return;
+        }
+
+        if transformed {
+            target = target.scale(self.local_transform);
         }
 
         // TODO replace IK with angular constraints?
