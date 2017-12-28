@@ -13,14 +13,11 @@ use super::{Constraint, Particle, ParticleSystem, Vec2};
 
 
 // Skeleton Ragdoll Abstraction -----------------------------------------------
-pub struct RagdollConstraint {
-
-}
-
 pub struct Ragdoll {
     joints: Vec<Particle>,
     constraints: Vec<Box<Constraint>>,
     constraint_names: Vec<String>,
+    constraint_name_map: HashMap<String, usize>,
     joint_contraint_map: HashMap<usize, Vec<usize>>,
     steps_until_rest: usize,
     bounds: (Vec2, Vec2)
@@ -32,6 +29,7 @@ impl Ragdoll {
 
         let mut constraints = Vec::new();
         let mut constraint_names = Vec::new();
+        let mut constraint_name_map = HashMap::new();
         let mut joint_contraint_map = HashMap::new();
 
         // Bone joints
@@ -44,6 +42,7 @@ impl Ragdoll {
             joint_contraint_map.get_mut(&c.first_particle()).unwrap().push(index);
             joint_contraint_map.get_mut(&c.second_particle()).unwrap().push(index);
             constraints.push(c);
+            constraint_name_map.insert(name.clone(), index);
             constraint_names.push(name);
         }
 
@@ -51,11 +50,33 @@ impl Ragdoll {
             joints,
             constraints,
             constraint_names,
+            constraint_name_map,
             joint_contraint_map,
             steps_until_rest: 10,
             bounds: (Vec2::zero(), Vec2::zero())
         }
 
+    }
+
+    pub fn at_rest(&self) -> bool {
+        self.steps_until_rest == 0
+    }
+
+    pub fn bounds(&self) -> (Vec2, Vec2) {
+        self.bounds
+    }
+
+    pub fn constraint_points(&self, name: &str) -> (Vec2, Vec2) {
+        if let Some(index) = self.constraint_name_map.get(name) {
+            let c = &self.constraints[*index];
+            (
+                self.joints[c.first_particle()].position,
+                self.joints[c.second_particle()].position
+            )
+
+        } else {
+            (Vec2::zero(), Vec2::zero())
+        }
     }
 
     pub fn step<C: Fn(&mut Particle)>(&mut self, dt: f32, gravity: Vec2, collider: C) {
@@ -79,18 +100,40 @@ impl Ragdoll {
 
     }
 
-    pub fn visit<C: FnMut(Vec2, Vec2, &str)>(&mut self, mut callback: C) {
+    pub fn visit<C: FnMut(Vec2, Vec2, &str)>(&self, mut callback: C) {
         for (index, c) in self.constraints.iter().enumerate() {
             if c.visual() {
                 let name = &self.constraint_names[index];
                 let start = self.joints[c.first_particle()].position;
-                let end = self.joints[c.first_particle()].position;
+                let end = self.joints[c.second_particle()].position;
                 callback(start, end, name);
             }
         }
     }
 
-    // TODO visit constraints instead
+    pub fn apply_force(&mut self, local_origin: Vec2, force: Vec2, width: f32) {
+
+        // Strength
+        let strength = force.len();
+        if strength > 0.0 {
+
+            // Direction of the force
+            let dir = force.unit();
+
+            // Calculate force for each joint
+            for joint in &mut self.joints {
+
+                // Distance from joint to origin
+                let d = 1.0 / ((joint.position - local_origin).len() / width.max(1.0)).max(1.0);
+
+                // Force applied to this joint
+                joint.apply_force(dir * strength * d);
+
+            }
+
+        }
+
+    }
 
     /*
     pub fn split_radgoll(&mut self, bone: &'static str) {
