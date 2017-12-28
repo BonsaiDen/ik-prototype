@@ -78,8 +78,7 @@ impl SkeletalData {
                 ragdoll_parent: ragdoll_parent,
                 children: Vec::new(),
 
-                tmp_update_angle: 0.0,
-                current_angle: 0.0,
+                angle: 0.0,
                 user_angle: 0.0,
 
                 start: Vec2::zero(),
@@ -357,8 +356,7 @@ impl Skeleton {
             // Reset all bones to the base skeleton angles
             for i in &self.child_last_indices {
                 let bone = &mut self.bones[*i];
-                bone.tmp_update_angle = 0.0;
-                bone.current_angle = self.bone_rest_angles[*i].1;
+                bone.angle = self.bone_rest_angles[*i].1;
             }
 
             // Update all bones relative to their parents
@@ -399,17 +397,17 @@ impl Skeleton {
                 // We need to incorporate the parent bone angle
                 // As this does not correctly update with the calculate_bone()
                 // calls below
-                self.bones[bone.parent].tmp_update_angle
+                self.bones[bone.parent].angle
             )
         };
 
-        // FIXME: Currently applying IK twice breaks everything since tmp_update_angle is required
+        // FIXME: Currently applying IK twice breaks everything since is required
         // in the calculation
         if let Some((a1, a2)) = solve_bone_ik(!positive, l1, l2, target.x - origin.x, target.y - origin.y) {
 
             // Rest angles are ignored by the IK so we need to add them back in
-            self.bones[parent].current_angle = a1 + self.bone_rest_angles[parent].1 - ca;
-            self.bones[index].current_angle = a2;
+            self.bones[parent].angle = a1 + self.bone_rest_angles[parent].1 - ca;
+            self.bones[index].angle = a2;
 
             let values = self.calculate_bone(parent);
             self.bones[parent].set(values);
@@ -580,15 +578,15 @@ impl Skeleton {
 
             let bone = &self.bones[index];
 
-            // Get bone's parent's temporary update angle
+            // Get bone's parent's angle
             let parent_angle = if bone.parent == 255 {
                 0.0
 
             } else {
-                self.bones[bone.parent].tmp_update_angle
+                self.bones[bone.parent].angle
             };
 
-            parent_angle + bone.current_angle + bone.user_angle
+            parent_angle + bone.angle + bone.user_angle
 
         };
 
@@ -625,8 +623,7 @@ pub struct Bone {
     ragdoll_parent: usize,
     children: Vec<usize>,
 
-    tmp_update_angle: f32,
-    current_angle: f32,
+    angle: f32,
     user_angle: f32,
 
     start: Vec2, // parent.end
@@ -670,7 +667,7 @@ impl Bone {
     }
 
     fn set(&mut self, values: (f32, Vec2, Vec2)) {
-        self.tmp_update_angle = values.0;
+        self.angle = values.0;
         self.start = values.1;
         self.set_end(values.2);
     }
