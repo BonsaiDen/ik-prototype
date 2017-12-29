@@ -203,6 +203,7 @@ pub struct Particle {
     rest_position: Vec2,
     constant_force: Vec2,
     acceleration: Vec2,
+    inv_friction: f32,
     inv_mass: f32
 }
 
@@ -216,6 +217,7 @@ impl Particle {
             rest_position: position,
             constant_force: Vec2::zero(),
             acceleration: Vec2::zero(),
+            inv_friction: 1.0,
             inv_mass: 1.0
         }
     }
@@ -227,6 +229,7 @@ impl Particle {
             rest_position: position,
             constant_force: Vec2::zero(),
             acceleration: Vec2::zero(),
+            inv_friction: 1.0,
             inv_mass: inv_mass
         }
     }
@@ -254,13 +257,7 @@ impl Particle {
         }
     }
 
-    /*
-    pub fn apply_constant_force(&mut self, force: Vec2) {
-        self.constant_force = force;
-    }*/
-
 }
-
 
 
 // Simple Verlet based Particle System ----------------------------------------
@@ -335,13 +332,6 @@ impl ParticleSystem {
     }
 
     // Visitors ---------------------------------------------------------------
-    /*
-    pub fn visit_particles<C: FnMut(usize, &Particle)>(&self, mut callback: C) {
-        for (index, p) in self.particles.iter().enumerate() {
-            callback(index, p);
-        }
-    }*/
-
     pub fn visit_particles_mut<C: FnMut(usize, &mut Particle)>(&mut self, mut callback: C) {
         for (index, p) in self.particles.iter_mut().enumerate() {
             callback(index, p);
@@ -371,7 +361,7 @@ impl ParticleSystem {
         for p in particles {
             let current_pos = p.position;
             let change = p.position - p.prev_position + p.acceleration * time_step * time_step;
-            p.position = p.position + change * p.inv_mass;
+            p.position = p.position + change * p.inv_friction * p.inv_mass;
             p.prev_position = current_pos;
         }
     }
@@ -400,6 +390,10 @@ impl ParticleSystem {
             bounds.1.x = -10000.0;
             bounds.1.y = -10000.0;
 
+            for c in constraints {
+                c.solve(particles);
+            }
+
             for mut p in particles.iter_mut() {
                 collider(&mut p);
                 if !p.at_rest() {
@@ -409,10 +403,6 @@ impl ParticleSystem {
                 bounds.0.y = bounds.0.y.min(p.position.y);
                 bounds.1.x = bounds.1.x.max(p.position.x);
                 bounds.1.y = bounds.1.y.max(p.position.y);
-            }
-
-            for c in constraints {
-                c.solve(particles);
             }
 
         }

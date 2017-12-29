@@ -300,8 +300,10 @@ impl Skeleton {
         }
 
         let mut ragdoll = Ragdoll::new(particles, constraints);
-        //ragdoll.split_joint_from_parent("Head");
-        //ragdoll.split_joint_from_parent("R.Leg");
+        ragdoll.split_bone_from_parent("L.Leg");
+        ragdoll.split_bone_from_parent("R.Leg");
+        ragdoll.split_bone_from_parent("L.Arm");
+        ragdoll.split_bone_from_parent("R.Arm");
         self.ragdoll = Some(ragdoll);
 
     }

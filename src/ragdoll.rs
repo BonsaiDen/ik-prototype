@@ -123,9 +123,13 @@ impl Ragdoll {
 
     }
 
-    pub fn split_joint_from_parent(&mut self, name: &str) {
+    pub fn split_bone_from_parent(&mut self, name: &str) {
+        self.split_off_joint(name, None);
+    }
 
-        // TODO create another version which splits in half
+    // Internal ---------------------------------------------------------------
+    fn split_off_joint(&mut self, name: &str, at_length: Option<f32>) {
+
         let ci = *&self.constraint_name_map[name];
         let (end, start) = {
             let constraint = &self.constraints[ci];
@@ -154,32 +158,40 @@ impl Ragdoll {
             !is_crossing
         });
 
-        // Then we duplicate the joint and insert it into our list of points
-        // TODO use end point and first_particle() if required?
-        // TODO have this always split of at the parent
-        let new_joint = self.joints[start].clone();
-        let new_index = self.joints.len();
-        self.joints.push(new_joint);
+        // Split constraint at length...
+        if let Some(_) = at_length {
 
-        // Create a new constraint to replace the existing one
-        let rest_length = (self.joints[new_index].position - self.joints[end].position).len();
-        let mut c = StickConstraint::new(
-            self.constraints[ci].name().to_string(),
-            end,
-            new_index,
-            rest_length
-        );
-        c.set_visual(true);
+            // TODO
 
-        // Replace old constraint with the new one that using the duplicated point
-        self.constraints[ci] = Box::new(c);
+
+        // ...or remove joint from parent socket...
+        } else {
+
+            // We duplicate the joint and insert it into our list of points
+            let new_joint = self.joints[start].clone();
+            let new_index = self.joints.len();
+            self.joints.push(new_joint);
+
+            // Then create a new constraint to replace the existing one
+            let rest_length = (self.joints[new_index].position - self.joints[end].position).len();
+            let mut c = StickConstraint::new(
+                self.constraints[ci].name().to_string(),
+                end,
+                new_index,
+                rest_length
+            );
+            c.set_visual(true);
+
+            // Finally replace old constraint with the new one that using the duplicated point
+            self.constraints[ci] = Box::new(c);
+
+        }
 
         // Rebuild joint constraint map
         self.rebuild_constraints();
 
     }
 
-    // Internal ---------------------------------------------------------------
     fn rebuild_constraints(&mut self) {
 
         self.joint_constraint_map.clear();
