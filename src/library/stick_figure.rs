@@ -33,22 +33,22 @@ lazy_static! {
 
     static ref DEFAULT_FIGURE_SKELETON: SkeletalData = SkeletalData {
         bones: vec![
-            (  "Root", ( "Root",  0.0, -D90, 0.00, 0.98)), // 0
+            (  "Root", ( "Root",  0.0, -D90, 0.98, None, None)), // 0
 
-            (  "Back", ( "Root", 18.0,  0.0, 0.00, 0.99)), // 1
-            (  "Head", ( "Back", 10.0,  0.0, 0.00, 0.99)), // 2
+            (  "Back", ( "Root", 18.0,  0.0, 0.99, None, None)), // 1
+            (  "Head", ( "Back", 10.0,  0.0, 0.99, None, None)), // 2
 
-            ( "R.Arm", ( "Back",  9.0,  D90, 0.00, 1.00)), // 3
-            ("R.Hand", ("R.Arm", 13.0,  0.0, 0.00, 1.00)), // 4
-            ( "L.Arm", ( "Back",  9.0, -D90, 0.00, 1.00)),  // 5
-            ("L.Hand", ("L.Arm", 13.0,  0.0, 0.00, 1.00)), // 6
+            ( "R.Arm", ( "Back",  9.0,  D90, 1.00, None, None)), // 3
+            ("R.Hand", ("R.Arm", 13.0,  0.0, 1.00, Some(0.0), Some(D90 * 1.9))), // 4
+            ( "L.Arm", ( "Back",  9.0, -D90, 1.00, None, None)),  // 5
+            ("L.Hand", ("L.Arm", 13.0,  0.0, 1.00, Some(0.0), Some(D90 * 1.9))), // 6
 
-            (   "Hip", ( "Root",   0.0,   PI, 0.00, 1.00)), // 7
+            (   "Hip", ( "Root",   0.0,  PI, 1.00, None, None)), // 7
 
-            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 8
-            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)), // 9
-            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 10
-            ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 11
+            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.99, None, None)), // 8
+            ("R.Foot", ("R.Leg", 14.0,  0.0, 1.00, Some(-D90 * 1.9), Some(0.0))), // 9
+            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.99, None, None)), // 10
+            ("L.Foot", ("L.Leg", 14.0,  0.0, 1.00, Some(-D90 * 1.9), Some(0.0))), // 11
         ],
         ragdoll_parents: vec![
             // Skip hip during ragdolls
@@ -77,10 +77,10 @@ lazy_static! {
         key_frames: vec![
             // Pose
             (0.0, vec![
-                ( "L.Leg", -D22),
-                ("L.Foot",  0.0),
-                ( "R.Leg",  D22),
-                ("R.Foot",  0.0),
+                ( "L.Leg", -D45),
+                ("L.Foot",  D45),
+                ( "R.Leg",  0.0),
+                ("R.Foot",  D45),
 
                 ( "R.Arm", D90 * 1.25),
                 ("R.Hand",  -D90),
@@ -89,10 +89,10 @@ lazy_static! {
             ]),
             // Matches the idle compression
             (1.25 * 0.5, vec![
-                ( "L.Leg", -D22),
-                ("L.Foot",  0.0),
-                ( "R.Leg",  D22),
-                ("R.Foot",  0.0),
+                ( "L.Leg", -D45),
+                ("L.Foot",  D45),
+                ( "R.Leg",  0.0),
+                ("R.Foot",  D45),
 
                 ( "R.Arm", D90 * 1.0),
                 ("R.Hand",  -D90),
@@ -525,8 +525,11 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         let run_offset = ((self.run_timer * self.config.run_speed).sin() * self.config.run_compression) as f32 + self.config.run_compression * 2.0;
         let run_offset = Vec2::new(0.0, run_offset * ((self.run_timer * self.config.run_speed).min(1.0)));
 
+        let mut recoil_compression = Angle::from_radians(direction).to_unit_vec() * -self.recoil * 0.5;
+        recoil_compression.y = recoil_compression.y.max(0.0);
+
         self.skeleton.set_world_offset(
-            position + self.config.offset + idle_offset + crouch_offset + run_offset + compression
+            position + self.config.offset + idle_offset + crouch_offset + run_offset + compression + recoil_compression
         );
 
         // Animate and Arrange
@@ -554,11 +557,13 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
             let foot_l = self.skeleton.bone_end(Space::Local, "L.Foot");
             if let Some((p, _, _)) = collider.world(foot_l + world_offset) {
                 self.skeleton.apply_bone_ik("L.Foot", p - world_offset, false, true);
+                //self.skeleton.apply_bone_ik_new(p - world_offset - Vec2::new(0.0, 0.0), "L.Foot", "Hip", true);
             }
 
             let foot_r = self.skeleton.bone_end(Space::Local, "R.Foot");
             if let Some((p, _, _)) = collider.world(foot_r + world_offset) {
                 self.skeleton.apply_bone_ik("R.Foot", p - world_offset, false, true);
+                //self.skeleton.apply_bone_ik_new(p - world_offset, "R.Foot", "Hip", true);
             }
         }
 

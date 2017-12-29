@@ -27,8 +27,8 @@ pub enum SkeletalConstraint {
 }
 
 type SkeletalBoneDescription = (
-    // Parent, length, angle, ik_inv_mass, ragdoll_inv_mass
-    &'static str, f32, f32, f32, f32
+    // Parent, length, angle, ragdoll_inv_mass
+    &'static str, f32, f32, f32, Option<f32>, Option<f32>
 );
 type SkeletalBone = (&'static str, SkeletalBoneDescription);
 type RagdollBoneLink = (&'static str, &'static str);
@@ -84,6 +84,9 @@ impl SkeletalData {
 
                 start: Vec2::zero(),
                 end: Vec2::zero(),
+
+                min_angle: (bone.1).4,
+                max_angle: (bone.1).5,
 
                 data: bone
             }
@@ -245,8 +248,8 @@ impl Skeleton {
                 SkeletalConstraint::Stick(parent, child) => {
                     let parent = self.bone_by_name(parent).unwrap().index();
                     let child = self.bone_by_name(child).unwrap().index();
-                    let ap = self.bones[parent].end_local();
-                    let bp = self.bones[child].end_local();
+                    let ap = self.bones[parent].end();
+                    let bp = self.bones[child].end();
                     constraints.push(
                         Box::new(StickConstraint::new(
                             format!("s-{}-{}", parent, child),
@@ -437,7 +440,7 @@ impl Skeleton {
             }
 
         } else if let Some(bone) = self.bone_by_name(name) {
-            let start = bone.start_local();
+            let start = bone.start();
             match space {
                 Space::World => self.to_world(start.scale(self.local_transform)),
                 Space::Local => start.scale(self.local_transform),
@@ -464,7 +467,7 @@ impl Skeleton {
             }
 
         } else if let Some(bone) = self.bone_by_name(name) {
-            let end = bone.end_local();
+            let end = bone.end();
             match space {
                 Space::World => self.to_world(end.scale(self.local_transform)),
                 Space::Local => end.scale(self.local_transform),
@@ -501,7 +504,7 @@ impl Skeleton {
                 bone.length(),
                 bone.parent,
                 bone.index,
-                self.bones[bone.parent].start_local(),
+                self.bones[bone.parent].start(),
                 // Parent angle offset after animation
                 self.bone_rest_angles[bone.parent].1 - self.bones[bone.parent].animation_angle
             )
@@ -521,6 +524,25 @@ impl Skeleton {
         }
 
     }
+
+    /*
+    pub fn apply_bone_ik_new(&mut self, mut target: Vec2, bone: &str, root: &str, transformed: bool) {
+
+        // Ignore setting IKs during ragdoll
+        if self.ragdoll.is_some() {
+            return;
+
+        // Transform IK target into animation space
+        } else if transformed {
+            target = target.scale(self.local_transform);
+        }
+
+        let bone = self.bone_by_name(bone).unwrap().index();
+        let root = self.bone_by_name(root).unwrap().index();
+
+        ccd_ik(target, bone, root, &mut self.bones[..], 3);
+
+    }*/
 
     pub fn apply_bone_angle(&mut self, name: &str, angle: f32) {
         if let Some(index) = self.name_to_index.get(name) {
@@ -544,8 +566,8 @@ impl Skeleton {
 
             for i in sequence {
                 let bone = &self.bones[*i];
-                let start = bone.start_local().scale(self.local_transform);
-                let end = bone.end_local().scale(self.local_transform);
+                let start = bone.start().scale(self.local_transform);
+                let end = bone.end().scale(self.local_transform);
                 callback(start, end, bone.name());
             }
 
@@ -611,7 +633,7 @@ impl Skeleton {
             Vec2::zero()
 
         } else {
-            self.bones[bone.parent].end_local()
+            self.bones[bone.parent].end()
         };
 
         // Calculate end offset from angle and length
@@ -641,8 +663,11 @@ pub struct Bone {
     animation_angle: f32,
     offset_angle: f32,
 
-    start: Vec2, // parent.end
+    start: Vec2,
     end: Vec2,
+
+    min_angle: Option<f32>,
+    max_angle: Option<f32>,
 
     data: &'static SkeletalBone
 }
@@ -683,33 +708,42 @@ impl Bone {
     }
 
     fn to_particle(&self, transform: Vec2) -> Particle {
-        Particle::with_inv_mass(self.end_local().scale(transform), (self.data.1).4)
+        Particle::with_inv_mass(self.end().scale(transform), (self.data.1).3)
     }
 
     fn set(&mut self, values: (f32, Vec2, Vec2)) {
         self.angle = values.0;
         self.animation_angle = values.0;
         self.start = values.1;
-        self.set_end(values.2);
+        self.end = values.2;
     }
 
     fn set_ik(&mut self, values: (f32, Vec2, Vec2)) {
         self.angle = values.0;
         self.start = values.1;
-        self.set_end(values.2);
+        self.end = values.2;
     }
 
-    fn set_end(&mut self, p: Vec2) {
-        self.end = p;
-    }
-
-    fn start_local(&self) -> Vec2 {
+    fn start(&self) -> Vec2 {
         self.start
     }
 
-    fn end_local(&self) -> Vec2 {
+    fn end(&self) -> Vec2 {
         self.end
     }
+
+    /*
+    fn set_start_ik(&mut self, p: Vec2) {
+        self.start = p;
+        self.end = self.end_computed();
+    }
+
+    fn end_computed(&self) -> Vec2 {
+        Vec2::new(
+            self.start.x + self.angle.cos() * self.length(),
+            self.start.y + self.angle.sin() * self.length()
+        )
+    }*/
 
 }
 
@@ -781,3 +815,109 @@ fn solve_bone_ik(solve_positive: bool, l1: f32, l2: f32, x: f32, y: f32) -> Opti
 
 }
 
+/*
+fn ccd_ik(target: Vec2, child: usize, root: usize, bones: &mut[Bone], iterations: usize) {
+
+    // Drag child to target
+    {
+        let bone = &mut bones[child];
+        let delta = target - bone.start();
+        bone.angle = delta.y.atan2(delta.x);
+        let start = target - Vec2::new(
+            bone.angle.cos() * bone.length(),
+            bone.angle.sin() * bone.length()
+        );
+        bone.set_start_ik(start);
+    }
+
+    let mut bone_list = Vec::new();
+    for iter in 0..iterations {
+
+        // Inverse phase
+        let mut current = child;
+        loop {
+
+            // Stop in case there are no further parents
+            let parent = bones[current].parent;
+            if parent == 255 {
+                break;
+            }
+
+            // Only build bone list during first iteration
+            if iter == 0 {
+                bone_list.push(bones[current].index());
+            }
+
+            // Point parent at child start
+            let child_start = bones[current].start();
+            let delta = child_start - bones[parent].start();
+            let angle = delta.y.atan2(delta.x);
+            bones[parent].angle = angle;
+
+            // Stop after root child, we don't want to peposition it
+            if parent == root {
+                break;
+            }
+
+            // Reposition parent
+            let length = bones[parent].length();
+            bones[parent].set_start_ik(child_start - Vec2::new(
+                angle.cos() * length,
+                angle.sin() * length
+            ));
+
+            // Repeat with next parent
+            current = parent;
+
+        }
+
+        // Angle phase
+        for i in bone_list.iter() {
+
+            let parent_position = bones[bones[*i].parent].start();
+            let bone = &mut bones[*i];
+
+            // Axis of parent and child
+            let parent_axis = parent_position - bone.start();
+            let child_end = bone.end_computed();
+            let child_axis = bone.start() - child_end;
+
+            // Relative angle between parent and child
+            let parent_angle = parent_axis.angle();
+            let rel_angle = child_axis.angle_between(parent_axis);
+
+            // Clamp angles
+            if let Some(min_angle) = bone.min_angle {
+                if rel_angle < min_angle {
+                    bone.angle = parent_angle + (PI - min_angle);
+                    let start = child_end - Vec2::new(
+                        bone.angle.cos() * bone.length(),
+                        bone.angle.sin() * bone.length()
+                    );
+                    bone.set_start_ik(start);
+                }
+            }
+
+            if let Some(max_angle) = bone.max_angle {
+                if rel_angle > max_angle {
+                    bone.angle = parent_angle + (PI - max_angle);
+                    let start = child_end - Vec2::new(
+                        bone.angle.cos() * bone.length(),
+                        bone.angle.sin() * bone.length()
+                    );
+                    bone.set_start_ik(start);
+               }
+            }
+
+        }
+
+        // Forward phase
+        for i in bone_list.iter().rev() {
+            let start = bones[bones[*i].parent].end_computed();
+            bones[*i].set_start_ik(start);
+        }
+
+    }
+
+}
+*/

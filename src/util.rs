@@ -47,8 +47,9 @@ impl Vec2 {
         self.y.atan2(self.x)
     }
 
+    // Given in the range of -PI to PI
     pub fn angle_between(&self, other: Vec2) -> f32 {
-        (*self * other / (self.len() * other.len())).acos()
+        (self.x * other.y - self.y * other.x).atan2(self.x * other.x + self.y * other.y)
     }
 
     pub fn scale(&self, unit: Vec2) -> Vec2 {
@@ -226,13 +227,13 @@ impl Angle {
         Angle::from_radians(r).to_vec(distance)
     }
 
-    fn from_radians(r: f32) -> Self {
+    pub fn from_radians(r: f32) -> Self {
         Self {
             r: r
         }
     }
 
-    fn to_unit_vec(&self) -> Vec2 {
+    pub fn to_unit_vec(&self) -> Vec2 {
         Vec2::new(self.r.cos(), self.r.sin())
     }
 
