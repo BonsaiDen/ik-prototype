@@ -7,6 +7,10 @@
 // except according to those terms.
 
 
+// STD Dependencies -----------------------------------------------------------
+use std::collections::HashMap;
+
+
 // Types ----------------------------------------------------------------------
 pub type AnimationFrameBone = (&'static str, f32);
 type AnimationFrame = (f32, Vec<AnimationFrameBone>);
@@ -14,66 +18,180 @@ type AnimationFrame = (f32, Vec<AnimationFrameBone>);
 
 // Animation Data Abstraction -------------------------------------------------
 pub struct AnimationData {
-    pub name: &'static str,
     pub duration: f32,
     pub key_frames: Vec<AnimationFrame>
 }
 
 
-// Animation Blender Abstraction ----------------------------------------------
-pub struct AnimationBlender {
-    previous: Option<Animation>,
-    current: Option<Animation>,
-    blend: f32,
-    timer: f32,
-    duration: f32
+// Animator State Machine Abstraction -----------------------------------------
+pub struct AnimatorBuilder {
+    default_blend: f32,
+    blends: HashMap<(&'static str, &'static str), f32>,
+    states: HashMap<&'static str, AnimatorState>
 }
 
-impl AnimationBlender {
+impl AnimatorBuilder {
 
     pub fn new() -> Self {
         Self {
-            previous: None,
-            current: None,
-            blend: 0.0,
-            timer: 0.0,
-            duration: 0.0
+            default_blend: 0.0,
+            blends: HashMap::new(),
+            states: HashMap::new()
         }
     }
 
-    pub fn set(&mut self, animation: &'static AnimationData, blend_duration: f32, speed: f32) {
+    pub fn with_state<C: Fn(&mut AnimatorState)>(mut self, name: &'static str, callback: C) -> Self {
+        let mut state = AnimatorState::new();
+        callback(&mut state);
+        self.states.insert(name.into(), state);
+        self
+    }
 
-        // Ignore setting the same animation twice
-        if let Some(ref mut current) = self.current {
-            if current.name() == animation.name {
-                current.speed = speed;
+    pub fn with_default_blend(mut self, duration: f32) -> Self {
+        self.default_blend = duration;
+        self
+    }
+
+    pub fn with_blend(mut self, from: &'static str, to: &'static str, duration: f32) -> Self {
+        self.blends.insert((from.into(), to.into()), duration);
+        self
+    }
+
+    pub fn build(self) -> Animator {
+        Animator {
+            default_blend: self.default_blend,
+            blends: self.blends,
+            speeds: HashMap::new(),
+            blend_duration: 0.0,
+            blend_timer: 0.0,
+            states: self.states,
+            previous: None,
+            current: None
+        }
+    }
+
+}
+
+pub struct AnimatorState {
+    animations: Vec<AnimationInstance>
+}
+
+impl AnimatorState {
+
+    fn new() -> Self {
+        Self {
+            animations: Vec::new()
+        }
+    }
+
+    pub fn add_animation(&mut self, data: &'static AnimationData) {
+        self.animations.push(AnimationInstance::new(data, 1.0));
+    }
+
+    fn update(&mut self, dt: f32, speed: f32) {
+        for animation in &mut self.animations {
+            animation.speed = speed;
+            animation.update(dt);
+        }
+    }
+
+    fn reset(&mut self) {
+        for animation in &mut self.animations {
+            animation.reset();
+        }
+    }
+
+    fn apply_to_bones(&mut self, factor: f32, bones: &mut [AnimationFrameBone]) {
+        for animation in &mut self.animations {
+            // TODO merge multiple internal animations?
+            animation.apply_to(bones, factor);
+        }
+    }
+
+}
+
+pub struct Animator {
+    default_blend: f32,
+    blends: HashMap<(&'static str, &'static str), f32>,
+    speeds: HashMap<&'static str, f32>,
+    states: HashMap<&'static str, AnimatorState>,
+    blend_duration: f32,
+    blend_timer: f32,
+    previous: Option<&'static str>,
+    current: Option<&'static str>
+}
+
+impl Animator {
+
+    pub fn set_speed(&mut self, state: &'static str, factor: f32) {
+        if self.speeds.contains_key(state) {
+            if let Some(s) = self.speeds.get_mut(state) {
+                *s = factor;
+            }
+
+        } else {
+            self.speeds.insert(state, factor);
+        }
+    }
+
+    pub fn transition_to(&mut self, state: &'static str) {
+
+        // Do nothing if already in the requested state
+        if let Some(ref current) = self.current {
+            if *current == state {
                 return;
             }
         }
 
+        // Do nothing if the state does not exists
+        if let Some(ref mut state) = self.states.get_mut(state) {
+            state.reset();
+
+        } else {
+            return;
+        }
+
+        // Blend to next state
         self.previous = self.current.take();
-        self.current = Some(Animation::new(animation, speed));
-        self.timer = 0.0;
-        self.duration = blend_duration;
+        self.current = Some(state);
+
+        self.blend_duration = if let Some(ref previous) = self.previous {
+            self.blends.get(&(previous, state)).map(|d| *d).unwrap_or_else(|| {
+                self.blends.get(&("*", state)).map(|d| *d).unwrap_or_else(|| {
+                    self.blends.get(&(previous, "*")).map(|d| *d).unwrap_or(self.default_blend)
+                })
+            })
+
+        } else {
+            self.default_blend
+        };
+
+        println!("{:?} -> {:?} in {}", self.previous, self.current, self.blend_duration);
+        self.blend_timer = 0.0;
 
     }
 
     pub fn update(&mut self, dt: f32, bones: &mut [AnimationFrameBone]) {
 
-        self.timer = (self.timer + dt).min(self.duration);
-        self.blend = (1.0 / self.duration) * self.timer;
+        self.blend_timer = (self.blend_timer + dt).min(self.blend_duration);
 
-        let blend = cubic_bezier(0.0, 0.0, 1.0, 1.0, self.blend);
-        if let Some(ref mut previous) = self.previous {
-            if 1.0 - blend > 0.0 {
-                previous.update(dt);
-                previous.apply_to(bones, 1.0 - blend);
+        let blend_factor = cubic_bezier(0.0, 0.0, 1.0, 1.0, (1.0 / self.blend_duration) * self.blend_timer);
+        if let Some(ref previous) = self.previous {
+            let speed = self.speeds.get(previous).map(|s| *s).unwrap_or(1.0);
+            if let Some(ref mut state) = self.states.get_mut(previous) {
+                if 1.0 - blend_factor > 0.0 {
+                    state.update(dt, speed);
+                    state.apply_to_bones(1.0 - blend_factor, bones);
+                }
             }
         }
 
-        if let Some(ref mut current) = self.current {
-            current.update(dt);
-            current.apply_to(bones, blend);
+        if let Some(ref current) = self.current {
+            let speed = self.speeds.get(current).map(|s| *s).unwrap_or(1.0);
+            if let Some(ref mut state) = self.states.get_mut(current) {
+                state.update(dt, speed);
+                state.apply_to_bones(blend_factor, bones);
+            }
         }
 
     }
@@ -82,7 +200,7 @@ impl AnimationBlender {
 
 
 // Animation Abstraction ------------------------------------------------------
-pub struct Animation {
+pub struct AnimationInstance {
     time: f32,
     blend: f32,
     speed: f32,
@@ -90,9 +208,9 @@ pub struct Animation {
     data: &'static AnimationData
 }
 
-impl Animation {
+impl AnimationInstance {
 
-    pub fn new(data: &'static AnimationData, speed: f32) -> Self {
+    fn new(data: &'static AnimationData, speed: f32) -> Self {
         Self {
             time: 0.0,
             blend: 0.0,
@@ -102,11 +220,7 @@ impl Animation {
         }
     }
 
-    pub fn name(&self) -> &'static str {
-        self.data.name
-    }
-
-    pub fn update(&mut self, dt: f32) {
+    fn update(&mut self, dt: f32) {
 
         let duration = self.data.duration;
         let key_count = self.data.key_frames.len();
@@ -143,7 +257,26 @@ impl Animation {
 
     }
 
-    pub fn blend(&self) -> Vec<AnimationFrameBone> {
+    fn reset(&mut self) {
+        self.time = 0.0;
+        self.blend = 0.0;
+        self.speed = 0.0;
+        self.key_index = 0;
+    }
+
+    fn apply_to(&self, bones: &mut [AnimationFrameBone], factor: f32) {
+        let values = self.blend();
+        for  b in bones.iter_mut() {
+            for v in &values[..] {
+                if v.0 == b.0 {
+                    b.1 += v.1 * factor;
+                    break;
+                }
+            }
+        }
+    }
+
+    fn blend(&self) -> Vec<AnimationFrameBone> {
 
         let key_count = self.data.key_frames.len();
         let (_, ref prev_values) = self.data.key_frames[self.key_index];
@@ -161,18 +294,6 @@ impl Animation {
 
         blended_values
 
-    }
-
-    pub fn apply_to(&self, bones: &mut [AnimationFrameBone], factor: f32) {
-        let values = self.blend();
-        for  b in bones.iter_mut() {
-            for v in &values[..] {
-                if v.0 == b.0 {
-                    b.1 += v.1 * factor;
-                    break;
-                }
-            }
-        }
     }
 
 }

@@ -15,7 +15,7 @@ use std::collections::HashMap;
 // Internal Dependencies ------------------------------------------------------
 use ::{
     Skeleton, SkeletalData, SkeletalConstraint,
-    AnimationData,
+    AnimatorBuilder, AnimationData,
     Angle, Vec2, Space,
     f32_equals
 };
@@ -72,7 +72,6 @@ lazy_static! {
     };
 
     static ref IDLE_ANIMATION: AnimationData = AnimationData {
-        name: "Idle",
         duration: 1.25,
         key_frames: vec![
             // Pose
@@ -103,7 +102,6 @@ lazy_static! {
     };
 
     static ref JUMP_ANIMATION: AnimationData = AnimationData {
-        name: "Jump",
         duration: 0.6,
         key_frames: vec![
             // 1
@@ -136,7 +134,6 @@ lazy_static! {
     };
 
     static ref RUN_ANIMATION: AnimationData = AnimationData {
-        name: "Run",
         duration: 1.0,
         key_frames: vec![
             // Pass
@@ -195,7 +192,6 @@ lazy_static! {
     };
 
     static ref WALK_BACKWARDS_ANIMATION: AnimationData = AnimationData {
-        name: "WalkBackwards",
         duration: 0.8,
         key_frames: vec![
 
@@ -352,11 +348,33 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         config: StickFigureConfig
 
     ) -> Self {
+
+        let animator = AnimatorBuilder::new().with_state("Idle", |s| {
+            s.add_animation(&IDLE_ANIMATION);
+
+        }).with_state("Jump", |s| {
+            s.add_animation(&JUMP_ANIMATION);
+
+        }).with_state("Run", |s| {
+            s.add_animation(&RUN_ANIMATION);
+
+        }).with_state("Back", |s| {
+            s.add_animation(&WALK_BACKWARDS_ANIMATION);
+
+        }).with_blend("*", "Back", 0.05)
+          .with_blend("*", "Idle", 0.2)
+          .with_blend("Jump", "Idle", 0.1)
+          .with_blend("Jump", "Back", 0.2)
+          .with_default_blend(0.1).build();
+
+        let mut skeleton = Skeleton::new(data);
+        skeleton.set_animator(animator);
+
         Self {
             config: config,
             state: state,
 
-            skeleton: Skeleton::new(data),
+            skeleton: skeleton,
             crouch_timer: 0.0,
             idle_timer: 0.0,
             run_timer: 0.0,
@@ -496,22 +514,23 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         let run_factor = (1.0 / 3.5 * velocity.x).abs();
         let walk_backwards_factor = (self.config.velocity_backwards_factor / (3.5 * 0.5) * velocity.x).abs();
         if !self.state.is_grounded() {
-            self.skeleton.apply_animation(&JUMP_ANIMATION, velocity.x.abs().max(1.0).min(1.5), 0.1);
+            self.skeleton.animator().set_speed("Jump", velocity.x.abs().max(1.0).min(1.5));
+            self.skeleton.animator().transition_to("Jump");
 
         } else if velocity.x.abs() > 0.5 {
             if f32_equals(velocity.x.signum(), facing.x) {
-                self.skeleton.apply_animation(&RUN_ANIMATION, run_factor, 0.1);
+                self.skeleton.animator().set_speed("RuN", run_factor);
+                self.skeleton.animator().transition_to("Run");
 
             } else {
-                self.skeleton.apply_animation(&WALK_BACKWARDS_ANIMATION, walk_backwards_factor, 0.05);
+                self.skeleton.animator().set_speed("Back", walk_backwards_factor);
+                self.skeleton.animator().transition_to("Back");
             }
 
         } else {
             // TODO add in idle speed for multiplication
-            // TODO use different blend factor based on previous animation
-            // TODO fall -> idle: 0.1
-            // TODO run / walk -> idle: 0.2
-            self.skeleton.apply_animation(&IDLE_ANIMATION, 1.0, 0.2);
+            self.skeleton.animator().set_speed("Idle", 1.0);
+            self.skeleton.animator().transition_to("Idle");
         }
 
         // Offsets

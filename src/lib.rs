@@ -28,7 +28,7 @@ mod util;
 pub use self::util::*;
 
 mod animation;
-pub use self::animation::{Animation, AnimationData};
+pub use self::animation::{Animator, AnimatorBuilder, AnimationData};
 
 mod particle;
 pub use self::particle::{

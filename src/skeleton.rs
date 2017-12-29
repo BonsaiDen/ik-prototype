@@ -14,7 +14,7 @@ use std::collections::HashMap;
 
 // Internal Dependencies ------------------------------------------------------
 use super::{Angle, Space, Vec2};
-use super::animation::{AnimationFrameBone, AnimationData, AnimationBlender};
+use super::animation::{Animator, AnimatorBuilder, AnimationFrameBone};
 use super::{
     Constraint, AngularConstraint, StickConstraint, Ragdoll, Particle
 };
@@ -157,7 +157,7 @@ pub struct Skeleton {
     bone_rest_angles: Vec<AnimationFrameBone>,
 
     // Animation data
-    animation: AnimationBlender,
+    animator: Animator,
 
     // Ragdoll
     ragdoll: Option<Ragdoll>
@@ -206,7 +206,7 @@ impl Skeleton {
 
             // Animations
             bone_rest_angles: data.to_animation_bones(),
-            animation: AnimationBlender::new(),
+            animator: AnimatorBuilder::new().build(),
 
             // Ragdoll
             ragdoll: None
@@ -383,7 +383,7 @@ impl Skeleton {
             self.data.reset_animation_bones(&mut self.bone_rest_angles[..]);
 
             // Forward animations and calculate animation bone angles
-            self.animation.update(dt, &mut self.bone_rest_angles[..]);
+            self.animator.update(dt, &mut self.bone_rest_angles[..]);
 
             // Reset all bones to the base skeleton angles
             for i in &self.child_last_indices {
@@ -406,13 +406,14 @@ impl Skeleton {
 
     }
 
-    pub fn apply_animation(
-        &mut self,
-        data: &'static AnimationData,
-        speed_factor: f32,
-        blend_duration: f32
-    ) {
-        self.animation.set(data, blend_duration, speed_factor);
+
+    // Animations -------------------------------------------------------------
+    pub fn animator(&mut self) -> &mut Animator {
+        &mut self.animator
+    }
+
+    pub fn set_animator(&mut self, animator: Animator) {
+        self.animator = animator;
     }
 
     pub fn apply_world_force(&mut self, origin: Vec2, force: Vec2, width: f32) {
