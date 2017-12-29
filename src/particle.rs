@@ -19,6 +19,7 @@ pub enum ConstraintType {
 }
 
 pub trait Constraint {
+    fn name(&self) -> &str;
     fn typ(&self) -> ConstraintType;
     fn first_particle(&self) -> usize;
     fn second_particle(&self) -> usize;
@@ -31,6 +32,7 @@ pub trait Constraint {
 
 // 2D Particles Constraints ---------------------------------------------------
 pub struct StickConstraint {
+    name: String,
     a: usize,
     b: usize,
     rest_length: f32,
@@ -39,8 +41,9 @@ pub struct StickConstraint {
 
 impl StickConstraint {
 
-    pub fn new(a: usize, b: usize, rest_length: f32) -> Self {
+    pub fn new(name: String, a: usize, b: usize, rest_length: f32) -> Self {
         Self {
+            name,
             a,
             b,
             rest_length,
@@ -55,6 +58,10 @@ impl StickConstraint {
 }
 
 impl Constraint for StickConstraint {
+
+    fn name(&self) -> &str {
+        &self.name
+    }
 
     fn typ(&self) -> ConstraintType {
         ConstraintType::Stick
@@ -101,6 +108,7 @@ impl Constraint for StickConstraint {
 }
 
 pub struct AngularConstraint {
+    name: String,
     p: usize,
     e: usize,
     j: usize,
@@ -111,8 +119,9 @@ pub struct AngularConstraint {
 
 impl AngularConstraint {
 
-    pub fn new(p: usize, e: usize, j: usize, rest_length: f32, is_left: bool) -> Self {
+    pub fn new(name: String, p: usize, e: usize, j: usize, rest_length: f32, is_left: bool) -> Self {
         Self {
+            name,
             p,
             e,
             j,
@@ -129,6 +138,10 @@ impl AngularConstraint {
 }
 
 impl Constraint for AngularConstraint {
+
+    fn name(&self) -> &str {
+        &self.name
+    }
 
     fn typ(&self) -> ConstraintType {
         ConstraintType::Angular
@@ -443,12 +456,16 @@ impl ParticleTemplate {
 
                 if x < cols - 1 {
                     let right = y * cols + x + 1;
-                    particles.add_constraint(StickConstraint::new(index, right, spacing));
+                    particles.add_constraint(
+                        StickConstraint::new("".to_string(), index, right, spacing)
+                    );
                 }
 
                 if y < rows - 1 {
                     let bottom = (y + 1) * cols + x;
-                    particles.add_constraint(StickConstraint::new(index, bottom, spacing));
+                    particles.add_constraint(
+                        StickConstraint::new("".to_string(), index, bottom, spacing)
+                    );
                 }
 
             }

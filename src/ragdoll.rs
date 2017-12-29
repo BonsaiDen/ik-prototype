@@ -8,8 +8,8 @@
 
 
 // STD Dependencies -----------------------------------------------------------
-use std::collections::HashMap;
-use super::{Constraint, Particle, ParticleSystem, Vec2};
+use std::collections::{HashMap, HashSet};
+use super::{Constraint, StickConstraint, Particle, ParticleSystem, Vec2};
 
 
 // Skeleton Ragdoll Abstraction -----------------------------------------------
@@ -18,46 +18,32 @@ pub struct Ragdoll {
     constraints: Vec<Box<Constraint>>,
     constraint_names: Vec<String>,
     constraint_name_map: HashMap<String, usize>,
-    joint_contraint_map: HashMap<usize, Vec<usize>>,
+    joint_constraint_map: HashMap<usize, Vec<usize>>,
     steps_until_rest: usize,
     bounds: (Vec2, Vec2)
 }
 
 impl Ragdoll {
 
-    pub fn new(joints: Vec<Particle>, named_constraints: Vec<(String, Box<Constraint>)>) -> Self {
+    pub fn new(joints: Vec<Particle>, constraints: Vec<Box<Constraint>>) -> Self {
 
-        let mut constraints = Vec::new();
-        let mut constraint_names = Vec::new();
-        let mut constraint_name_map = HashMap::new();
-        let mut joint_contraint_map = HashMap::new();
-
-        // Bone joints
-        for (index, _) in joints.iter().enumerate() {
-            joint_contraint_map.insert(index, Vec::new());
-        }
-
-        // Bone constraints
-        for (index, (name, c)) in named_constraints.into_iter().enumerate() {
-            joint_contraint_map.get_mut(&c.first_particle()).unwrap().push(index);
-            joint_contraint_map.get_mut(&c.second_particle()).unwrap().push(index);
-            constraints.push(c);
-            constraint_name_map.insert(name.clone(), index);
-            constraint_names.push(name);
-        }
-
-        Self {
+        let mut ragdoll = Self {
             joints,
             constraints,
-            constraint_names,
-            constraint_name_map,
-            joint_contraint_map,
+            constraint_names: Vec::new(),
+            constraint_name_map: HashMap::new(),
+            joint_constraint_map: HashMap::new(),
             steps_until_rest: 10,
             bounds: (Vec2::zero(), Vec2::zero())
-        }
+        };
+
+        ragdoll.rebuild_constraints();
+        ragdoll
 
     }
 
+
+    // Getters ----------------------------------------------------------------
     pub fn at_rest(&self) -> bool {
         self.steps_until_rest == 0
     }
@@ -79,6 +65,7 @@ impl Ragdoll {
         }
     }
 
+    // Others -----------------------------------------------------------------
     pub fn step<C: Fn(&mut Particle)>(&mut self, dt: f32, gravity: Vec2, collider: C) {
 
         if self.steps_until_rest == 0 {
@@ -111,6 +98,7 @@ impl Ragdoll {
         }
     }
 
+    // Forces -----------------------------------------------------------------
     pub fn apply_force(&mut self, local_origin: Vec2, force: Vec2, width: f32) {
 
         // Strength
@@ -135,33 +123,114 @@ impl Ragdoll {
 
     }
 
-    /*
-    pub fn split_radgoll(&mut self, bone: &'static str) {
-        if let Some(bone) = self.get_bone(bone) {
-            if let Some(parent) = bone.parent() {
+    pub fn split_joint_from_parent(&mut self, name: &str) {
 
-                // Get current start and end particles
-                let start = self.bones[parent].particle_index();
-                let end = bone.particle_index();
+        // TODO create another version which splits in half
+        let ci = *&self.constraint_name_map[name];
+        let (end, start) = {
+            let constraint = &self.constraints[ci];
+            (
+                constraint.first_particle(),
+                constraint.second_particle()
+            )
+        };
 
-                // Find the bone's constraint
-                let ci = self.constraints.iter().position(|c| {
-                     c.typ() == ConstraintType::Stick && c.first_particle() == start && c.second_particle() == end
-                });
+        // Separate the ragdoll into two sets of joints
+        // One to the left of the constraint to be split...
+        let mut left_points = HashSet::new();
+        self.find_points_behind_constraint(ci, end, &mut left_points);
 
-                if let Some(ci) = ci {
+        // And one to the right of the constraint to be split.
+        let mut right_points = HashSet::new();
+        self.find_points_behind_constraint(ci, start, &mut right_points);
 
-                    let constraint = &self.constraints[ci];
+        // Now we remove all non-visual constraints which were linking between those two sets
+        self.constraints.retain(|c| {
+            let (l, r) = (c.first_particle(), c.second_particle());
+            let is_crossing = !c.visual() && (left_points.contains(&l) && right_points.contains(&r))
+                           || (left_points.contains(&r) && right_points.contains(&l));
 
-                    // Clone start point
+            // Retain only non set crossing constraints
+            !is_crossing
+        });
 
-                    // Update bone and constraint start point
+        // Then we duplicate the joint and insert it into our list of points
+        // TODO use end point and first_particle() if required?
+        // TODO have this always split of at the parent
+        let new_joint = self.joints[start].clone();
+        let new_index = self.joints.len();
+        self.joints.push(new_joint);
+
+        // Create a new constraint to replace the existing one
+        let rest_length = (self.joints[new_index].position - self.joints[end].position).len();
+        let mut c = StickConstraint::new(
+            self.constraints[ci].name().to_string(),
+            end,
+            new_index,
+            rest_length
+        );
+        c.set_visual(true);
+
+        // Replace old constraint with the new one that using the duplicated point
+        self.constraints[ci] = Box::new(c);
+
+        // Rebuild joint constraint map
+        self.rebuild_constraints();
+
+    }
+
+    // Internal ---------------------------------------------------------------
+    fn rebuild_constraints(&mut self) {
+
+        self.joint_constraint_map.clear();
+        self.constraint_name_map.clear();
+        self.constraint_names.clear();
+
+        for index in 0..self.joints.len() {
+            self.joint_constraint_map.insert(index, Vec::new());
+        }
+
+        for (index, c) in self.constraints.iter().enumerate() {
+            self.joint_constraint_map.get_mut(&c.first_particle()).unwrap().push(index);
+            self.joint_constraint_map.get_mut(&c.second_particle()).unwrap().push(index);
+            self.constraint_name_map.insert(c.name().to_string(), index);
+            self.constraint_names.push(c.name().to_string());
+        }
+
+    }
+
+    fn find_points_behind_constraint(&self, constraint: usize, joint: usize, points: &mut HashSet<usize>) {
+
+        // Get all constraints connected to the current joint
+        let constraints = &self.joint_constraint_map[&joint];
+
+        // Add current joint to list
+        points.insert(joint);
+
+        // Search through all further constraints
+        for ci in constraints {
+            if *ci != constraint {
+
+                let constraint = &self.constraints[*ci];
+                if constraint.visual() {
+
+                    let end = constraint.first_particle();
+                    let start = constraint.second_particle();
+
+                    if !points.contains(&end) {
+                        self.find_points_behind_constraint(*ci, end, points);
+                    }
+
+                    if !points.contains(&start) {
+                        self.find_points_behind_constraint(*ci, start, points);
+                    }
 
                 }
 
             }
         }
-    }*/
+
+    }
 
 }
 

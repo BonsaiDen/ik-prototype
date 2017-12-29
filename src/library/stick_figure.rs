@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use ::{
     Skeleton, SkeletalData, SkeletalConstraint,
     AnimationData,
-    Angle, Vec2,
+    Angle, Vec2, Space,
     f32_equals
 };
 
@@ -45,10 +45,10 @@ lazy_static! {
 
             (   "Hip", ( "Root",   0.0,   PI, 0.00, 1.00)), // 7
 
-            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 10
-            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)), // 11
-            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 8
-            ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 9
+            ( "R.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 8
+            ("R.Foot", ("R.Leg", 14.0,  0.0, 0.00, 1.00)), // 9
+            ( "L.Leg", (  "Hip", 13.0,  0.0, 0.00, 0.99)), // 10
+            ("L.Foot", ("L.Leg", 14.0,  0.0, 0.00, 1.00)), // 11
         ],
         ragdoll_parents: vec![
             // Skip hip during ragdolls
@@ -489,26 +489,29 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
 
         ).min(self.config.leanback_max).max(self.config.leanback_min) * 0.009;;
 
-        self.skeleton.get_bone_mut("Back").unwrap().set_user_angle(leanback + velocity.x * 0.05 * facing.x);
-        self.skeleton.get_bone_mut("Head").unwrap().set_user_angle(leanback * self.config.leanback_head_factor);
+        self.skeleton.apply_bone_angle("Back", leanback + velocity.x * 0.05 * facing.x);
+        self.skeleton.apply_bone_angle("Head", leanback * self.config.leanback_head_factor);
 
         // Update Animations
         let run_factor = (1.0 / 3.5 * velocity.x).abs();
         let walk_backwards_factor = (self.config.velocity_backwards_factor / (3.5 * 0.5) * velocity.x).abs();
         if !self.state.is_grounded() {
-            self.skeleton.set_animation(&JUMP_ANIMATION, velocity.x.abs().max(1.0).min(1.5), 0.1);
+            self.skeleton.apply_animation(&JUMP_ANIMATION, velocity.x.abs().max(1.0).min(1.5), 0.1);
 
         } else if velocity.x.abs() > 0.5 {
             if f32_equals(velocity.x.signum(), facing.x) {
-                self.skeleton.set_animation(&RUN_ANIMATION, run_factor, 0.1);
+                self.skeleton.apply_animation(&RUN_ANIMATION, run_factor, 0.1);
 
             } else {
-                self.skeleton.set_animation(&WALK_BACKWARDS_ANIMATION, walk_backwards_factor, 0.05);
+                self.skeleton.apply_animation(&WALK_BACKWARDS_ANIMATION, walk_backwards_factor, 0.05);
             }
 
         } else {
             // TODO add in idle speed for multiplication
-            self.skeleton.set_animation(&IDLE_ANIMATION, 1.0, 0.1);
+            // TODO use different blend factor based on previous animation
+            // TODO fall -> idle: 0.1
+            // TODO run / walk -> idle: 0.2
+            self.skeleton.apply_animation(&IDLE_ANIMATION, 1.0, 0.2);
         }
 
         // Offsets
@@ -541,21 +544,21 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         for accessory in self.accessories.values() {
             if let Some(iks) = accessory.get_iks(&self.skeleton) {
                 for (bone, p, positive) in iks {
-                    self.skeleton.apply_ik(bone, p, positive, false);
+                    self.skeleton.apply_bone_ik(bone, p, positive, false);
                 }
             }
         }
 
         // Leg IKs
         if self.state.is_grounded() {
-            let foot_l = self.skeleton.get_bone_end_local("L.Foot");
+            let foot_l = self.skeleton.bone_end(Space::Local, "L.Foot");
             if let Some((p, _, _)) = collider.world(foot_l + world_offset) {
-                self.skeleton.apply_ik("L.Foot", p - world_offset, false, true);
+                self.skeleton.apply_bone_ik("L.Foot", p - world_offset, false, true);
             }
 
-            let foot_r = self.skeleton.get_bone_end_local("R.Foot");
+            let foot_r = self.skeleton.bone_end(Space::Local, "R.Foot");
             if let Some((p, _, _)) = collider.world(foot_r + world_offset) {
-                self.skeleton.apply_ik("R.Foot", p - world_offset, false, true);
+                self.skeleton.apply_bone_ik("R.Foot", p - world_offset, false, true);
             }
         }
 
@@ -577,8 +580,8 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
         }, true);
 
         // Draw Head
-        let head_end = self.skeleton.get_bone_end_world("Head");
-        let head_start = self.skeleton.get_bone_start_world("Head");
+        let head_end = self.skeleton.bone_end(Space::World, "Head");
+        let head_start = self.skeleton.bone_start(Space::World, "Head");
         let head_offset = (head_end - head_start) * 0.5;
         renderer.draw_circle(head_start + head_offset, 4.0, 0x00d0_d0d0);
 
@@ -664,7 +667,7 @@ impl<T: StickFigureState, R: Renderer + 'static, C: Collider + 'static> StickFig
     }
 
     fn compute_view_horizon_distance(&self) -> f32 {
-        let shoulder = self.skeleton.get_bone_end_local("Back");
+        let shoulder = self.skeleton.bone_end(Space::Local, "Back");
         let aim = shoulder + Angle::offset(
             self.state.direction(),
             self.config.line_of_sight_length

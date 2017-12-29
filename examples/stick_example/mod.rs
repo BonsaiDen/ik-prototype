@@ -41,17 +41,24 @@ impl Collider for Level {
 
     fn world(&self, mut p: Vec2) -> Option<(Vec2, i32, i32)> {
         let floor = self.floor;
+        let (mut horizontal, mut vertical) = (0, 0);
+
         if p.y > floor {
             p.y = p.y.min(floor);
-            Some((p, 0, 1))
+            vertical = 1;
+        }
 
-        } else if p.x < 0.0 {
+        if p.x < 0.0 {
             p.x = p.x.max(0.0);
-            Some((p, -1, 0))
+            horizontal = -1;
 
         } else if p.x > self.width  {
             p.x = p.x.min(self.width);
-            Some((p, 1, 0))
+            horizontal = 1;
+        }
+
+        if horizontal != 0 || vertical != 0 {
+            Some((p, horizontal, vertical))
 
         } else {
             None

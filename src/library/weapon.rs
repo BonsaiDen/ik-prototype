@@ -12,7 +12,7 @@ use std::f32::consts::PI;
 
 
 // Internal Dependencies ------------------------------------------------------
-use ::{Angle, Vec2, Skeleton, RigidBody, RigidBodyData};
+use ::{Angle, Vec2, Space, Skeleton, RigidBody, RigidBodyData};
 use ::library::{Accessory, Renderer, Collider};
 
 
@@ -115,7 +115,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
             None
 
         } else {
-            let shoulder = skeleton.get_bone_end_ik(self.bone);
+            let shoulder = skeleton.bone_end(Space::Animation, self.bone);
             Some(self.rigid.iks_static(shoulder))
         }
     }
@@ -123,7 +123,7 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Weapon {
     fn fixate(&mut self, skeleton: &Skeleton) {
         if !self.has_ragdoll {
 
-            let shoulder = skeleton.get_bone_end_world(self.bone);
+            let shoulder = skeleton.bone_end(Space::World, self.bone);
             let facing = Angle::facing(self.direction + PI * 0.5).to_vec();
 
             self.rigid.step_static(

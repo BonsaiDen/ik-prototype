@@ -14,6 +14,15 @@ extern crate lazy_static;
 extern crate downcast_rs;
 
 
+// Enums ----------------------------------------------------------------------
+#[derive(Debug, Eq, PartialEq)]
+pub enum Space {
+    World,
+    Local,
+    Animation
+}
+
+
 // Exports --------------------------------------------------------------------
 mod util;
 pub use self::util::*;

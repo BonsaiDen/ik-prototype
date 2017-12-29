@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 
 // Internal Dependencies ------------------------------------------------------
-use super::{Angle, Vec2};
+use super::{Angle, Space, Vec2};
 use super::animation::{AnimationFrameBone, AnimationData, AnimationBlender};
 use super::{
     Constraint, AngularConstraint, StickConstraint, Ragdoll, Particle
@@ -79,7 +79,8 @@ impl SkeletalData {
                 children: Vec::new(),
 
                 angle: 0.0,
-                user_angle: 0.0,
+                animation_angle: 0.0,
+                offset_angle: 0.0,
 
                 start: Vec2::zero(),
                 end: Vec2::zero(),
@@ -138,7 +139,7 @@ pub struct Skeleton {
     bones: Vec<Bone>,
 
     // Lookup table for Name -> Index relation
-    name_to_index: HashMap<&'static str, usize>,
+    name_to_index: HashMap<String, usize>,
 
     // Iteration indices
     child_first_indices: Vec<usize>,
@@ -174,7 +175,7 @@ impl Skeleton {
         let mut child_last_indices: Vec<usize> = Vec::with_capacity(bones.len());
 
         for b in &bones {
-            name_to_index.insert(b.name(), b.index);
+            name_to_index.insert(b.name().to_string(), b.index);
         }
 
         Skeleton::visit_bones(&bones[..], &root[..], &mut |bone| {
@@ -212,7 +213,7 @@ impl Skeleton {
     }
 
 
-    // Ragdolls ---------------------------------------------------------------
+    // Ragdoll ----------------------------------------------------------------
     pub fn at_rest(&self) -> bool {
         if let Some(ref ragdoll) = self.ragdoll {
             ragdoll.at_rest()
@@ -228,26 +229,37 @@ impl Skeleton {
 
     pub fn start_ragdoll(&mut self) {
 
-        let particles = self.get_particles();
-        let mut constraints = self.get_constraints();
+        let particles = self.bones.iter().map(|bone| {
+            bone.to_particle(self.local_transform)
+
+        }).collect();
+
+        let mut constraints: Vec<Box<Constraint>> = self.bones.iter().filter_map(|bone| {
+            bone.to_constaint()
+
+        }).collect();
 
         // Additional skeletal constraints
         for constraint in &self.data.constraints {
             match *constraint {
                 SkeletalConstraint::Stick(parent, child) => {
-                    let parent = self.get_bone(parent).unwrap().index();
-                    let child = self.get_bone(child).unwrap().index();
-                    let ap = self.get_bone_index(parent).end_local();
-                    let bp = self.get_bone_index(child).end_local();
-                    constraints.push((
-                        "".to_string(),
-                        Box::new(StickConstraint::new(parent, child, (ap - bp).len()))
-                    ));
+                    let parent = self.bone_by_name(parent).unwrap().index();
+                    let child = self.bone_by_name(child).unwrap().index();
+                    let ap = self.bones[parent].end_local();
+                    let bp = self.bones[child].end_local();
+                    constraints.push(
+                        Box::new(StickConstraint::new(
+                            format!("s-{}-{}", parent, child),
+                            parent,
+                            child,
+                            (ap - bp).len()
+                        ))
+                    );
                 },
                 SkeletalConstraint::Angular(parent, joint, child, left, right) => {
-                    let parent = self.get_bone(parent).unwrap().index();
-                    let joint = self.get_bone(joint).unwrap().index();
-                    let child = self.get_bone(child).unwrap().index();
+                    let parent = self.bone_by_name(parent).unwrap().index();
+                    let joint = self.bone_by_name(joint).unwrap().index();
+                    let child = self.bone_by_name(child).unwrap().index();
 
                     let (left, right) = if self.local_transform.x.signum() == -1.0 {
                         (right, left)
@@ -256,26 +268,41 @@ impl Skeleton {
                         (left, right)
                     };
 
-                    let a = self.get_bone_index(child).length();
-                    let b = self.get_bone_index(joint).length();
+                    let a = self.bones[child].length();
+                    let b = self.bones[joint].length();
 
                     let rest_length = (a * a + b * b - 2.0 * a * b * left.cos()).sqrt();
-                    constraints.push((
-                        "".to_string(),
-                        Box::new(AngularConstraint::new(parent, child, joint, rest_length, true))
-                    ));
+                    constraints.push(
+                        Box::new(AngularConstraint::new(
+                            format!("a-{}-{}-{}", parent, joint, child),
+                            parent,
+                            child,
+                            joint,
+                            rest_length,
+                            true
+                        ))
+                    );
 
                     let rest_length = (a * a + b * b - 2.0 * a * b * right.cos()).sqrt();
-                    constraints.push((
-                        "".to_string(),
-                        Box::new(AngularConstraint::new(parent, child, joint, rest_length, false))
-                    ));
+                    constraints.push(
+                        Box::new(AngularConstraint::new(
+                            format!("a-{}-{}-{}", parent, joint, child),
+                            parent,
+                            child,
+                            joint,
+                            rest_length,
+                            false
+                        ))
+                    );
 
                 }
             }
         }
 
-        self.ragdoll = Some(Ragdoll::new(particles, constraints));
+        let mut ragdoll = Ragdoll::new(particles, constraints);
+        //ragdoll.split_joint_from_parent("Head");
+        //ragdoll.split_joint_from_parent("R.Leg");
+        self.ragdoll = Some(ragdoll);
 
     }
 
@@ -374,49 +401,13 @@ impl Skeleton {
 
     }
 
-    pub fn apply_ik(&mut self, name: &'static str, mut target: Vec2, positive: bool, transformed: bool) {
-
-        // Ignore setting IKs during ragdoll
-        if self.ragdoll.is_some() {
-            return;
-        }
-
-        if transformed {
-            target = target.scale(self.local_transform);
-        }
-
-        // TODO replace IK with angular constraints?
-        let (l1, l2, parent, index, origin, ca) = {
-            let bone = self.get_bone(name).unwrap();
-            (
-                self.bones[bone.parent].length(),
-                bone.length(),
-                bone.parent,
-                bone.index,
-                self.bones[bone.parent].start_local(),
-                // We need to incorporate the parent bone angle
-                // As this does not correctly update with the calculate_bone()
-                // calls below
-                self.bones[bone.parent].angle
-            )
-        };
-
-        // FIXME: Currently applying IK twice breaks everything since is required
-        // in the calculation
-        if let Some((a1, a2)) = solve_bone_ik(!positive, l1, l2, target.x - origin.x, target.y - origin.y) {
-
-            // Rest angles are ignored by the IK so we need to add them back in
-            self.bones[parent].angle = a1 + self.bone_rest_angles[parent].1 - ca;
-            self.bones[index].angle = a2;
-
-            let values = self.calculate_bone(parent);
-            self.bones[parent].set(values);
-
-            let values = self.calculate_bone(index);
-            self.bones[index].set(values);
-
-        }
-
+    pub fn apply_animation(
+        &mut self,
+        data: &'static AnimationData,
+        speed_factor: f32,
+        blend_duration: f32
+    ) {
+        self.animation.set(data, blend_duration, speed_factor);
     }
 
     pub fn apply_world_force(&mut self, origin: Vec2, force: Vec2, width: f32) {
@@ -433,66 +424,105 @@ impl Skeleton {
     }
 
 
-    // Updating & Animation ---------------------------------------------------
-    pub fn set_animation(
-        &mut self,
-        data: &'static AnimationData,
-        speed_factor: f32,
-        blend_duration: f32
-    ) {
-        self.animation.set(data, blend_duration, speed_factor);
-    }
-
-
-    // Visitor ----------------------------------------------------------------
-    pub fn get_bone_end_world(&self, name: &'static str) -> Vec2 {
-        self.to_world(self.get_bone_end_local(name))
-    }
-
-    pub fn get_bone_start_world(&self, name: &'static str) -> Vec2 {
-        self.to_world(self.get_bone_start_local(name))
-    }
-
-    pub fn get_bone_end_local(&self, name: &'static str) -> Vec2 {
-        self.get_bone_end_ik(name).scale(self.local_transform)
-    }
-
-    pub fn get_bone_start_local(&self, name: &'static str) -> Vec2 {
-        self.get_bone_start_ik(name).scale(self.local_transform)
-    }
-
-    pub fn get_bone_end_ik(&self, name: &'static str) -> Vec2 {
+    // Bones ------------------------------------------------------------------
+    pub fn bone_start(&self, space: Space, name: &str) -> Vec2 {
         if let Some(ref ragdoll) = self.ragdoll {
-            // TODO we double scale here...
-            ragdoll.constraint_points(name).0.scale(self.local_transform)
+            let start = ragdoll.constraint_points(name).1;
+            match space {
+                Space::World => self.to_world(start),
+                Space::Local => start,
+                Space::Animation => start.scale(self.local_transform)
+            }
 
-        } else if let Some(bone) = self.get_bone(name) {
-            bone.end_local()
+        } else if let Some(bone) = self.bone_by_name(name) {
+            let start = bone.start_local();
+            match space {
+                Space::World => self.to_world(start.scale(self.local_transform)),
+                Space::Local => start.scale(self.local_transform),
+                Space::Animation => start
+            }
 
         } else {
-            self.world_position
+            let start = Vec2::zero();
+            match space {
+                Space::World => self.to_world(start),
+                Space::Local => start,
+                Space::Animation => start
+            }
         }
     }
 
-    pub fn get_bone_start_ik(&self, name: &'static str) -> Vec2 {
+    pub fn bone_end(&self, space: Space, name: &str) -> Vec2 {
         if let Some(ref ragdoll) = self.ragdoll {
-            // TODO we double scale here...
-            ragdoll.constraint_points(name).1.scale(self.local_transform)
+            let end = ragdoll.constraint_points(name).0;
+            match space {
+                Space::World => self.to_world(end),
+                Space::Local => end,
+                Space::Animation => end.scale(self.local_transform)
+            }
 
-        } else if let Some(bone) = self.get_bone(name) {
-            bone.start_local()
+        } else if let Some(bone) = self.bone_by_name(name) {
+            let end = bone.end_local();
+            match space {
+                Space::World => self.to_world(end.scale(self.local_transform)),
+                Space::Local => end.scale(self.local_transform),
+                Space::Animation => end
+            }
 
         } else {
-            self.world_position
+            let end = Vec2::zero();
+            match space {
+                Space::World => self.to_world(end),
+                Space::Local => end,
+                Space::Animation => end
+            }
         }
     }
 
-    pub fn get_bone_mut(&mut self, name: &'static str) -> Option<&mut Bone> {
+    pub fn apply_bone_ik(&mut self, name: &str, mut target: Vec2, positive: bool, transformed: bool) {
+
+        // Ignore setting IKs during ragdoll
+        if self.ragdoll.is_some() {
+            return;
+        }
+
+        // Transform IK target into animation space
+        if transformed {
+            target = target.scale(self.local_transform);
+        }
+
+        // TODO replace IK with angular constraints?
+        let (l1, l2, parent, index, origin, parent_rest_angle) = {
+            let bone = self.bone_by_name(name).unwrap();
+            (
+                self.bones[bone.parent].length(),
+                bone.length(),
+                bone.parent,
+                bone.index,
+                self.bones[bone.parent].start_local(),
+                // Parent angle offset after animation
+                self.bone_rest_angles[bone.parent].1 - self.bones[bone.parent].animation_angle
+            )
+        };
+
+        if let Some((a1, a2)) = solve_bone_ik(!positive, l1, l2, target.x - origin.x, target.y - origin.y) {
+
+            self.bones[parent].angle = a1 + parent_rest_angle;
+            self.bones[index].angle = a2;
+
+            let values = self.calculate_bone(parent);
+            self.bones[parent].set_ik(values);
+
+            let values = self.calculate_bone(index);
+            self.bones[index].set_ik(values);
+
+        }
+
+    }
+
+    pub fn apply_bone_angle(&mut self, name: &str, angle: f32) {
         if let Some(index) = self.name_to_index.get(name) {
-            Some(&mut self.bones[*index])
-
-        } else {
-            None
+            self.bones[*index].set_angle(angle);
         }
     }
 
@@ -523,31 +553,13 @@ impl Skeleton {
 
 
     // Internal ---------------------------------------------------------------
-    fn get_bone_index(&self, index: usize) -> &Bone {
-        &self.bones[index]
-    }
-
-    fn get_bone(&self, name: &'static str) -> Option<&Bone> {
+    fn bone_by_name(&self, name: &str) -> Option<&Bone> {
         if let Some(index) = self.name_to_index.get(name) {
             Some(&self.bones[*index])
 
         } else {
             None
         }
-    }
-
-    fn get_particles(&self) -> Vec<Particle> {
-        self.bones.iter().map(|bone| {
-            bone.to_particle(self.local_transform)
-
-        }).collect()
-    }
-
-    fn get_constraints(&self) -> Vec<(String, Box<Constraint>)> {
-        self.bones.iter().filter_map(|bone| {
-            bone.to_constaint()
-
-        }).collect()
     }
 
     fn visit_bones<C: FnMut(&Bone)>(
@@ -586,7 +598,7 @@ impl Skeleton {
                 self.bones[bone.parent].angle
             };
 
-            parent_angle + bone.angle + bone.user_angle
+            parent_angle + bone.angle + bone.offset_angle
 
         };
 
@@ -624,7 +636,8 @@ pub struct Bone {
     children: Vec<usize>,
 
     angle: f32,
-    user_angle: f32,
+    animation_angle: f32,
+    offset_angle: f32,
 
     start: Vec2, // parent.end
     end: Vec2,
@@ -634,7 +647,7 @@ pub struct Bone {
 
 impl Bone {
 
-    pub fn name(&self) -> &'static str {
+    pub fn name(&self) -> &str {
         self.data.0
     }
 
@@ -646,16 +659,21 @@ impl Bone {
         (self.data.1).1
     }
 
-    pub fn set_user_angle(&mut self, r: f32) {
-        self.user_angle = r;
+    pub fn set_angle(&mut self, r: f32) {
+        self.offset_angle = r;
     }
 
     // Internal ---------------------------------------------------------------
-    fn to_constaint(&self) -> Option<(String, Box<Constraint>)> {
+    fn to_constaint(&self) -> Option<Box<Constraint>> {
         if self.ragdoll_parent != 255 {
-            let mut c = StickConstraint::new(self.index, self.ragdoll_parent, self.length());
+            let mut c = StickConstraint::new(
+                self.name().to_string(),
+                self.index,
+                self.ragdoll_parent,
+                self.length()
+            );
             c.set_visual(true);
-            Some((self.name().to_string(), Box::new(c)))
+            Some(Box::new(c))
 
         } else {
             None
@@ -667,6 +685,13 @@ impl Bone {
     }
 
     fn set(&mut self, values: (f32, Vec2, Vec2)) {
+        self.angle = values.0;
+        self.animation_angle = values.0;
+        self.start = values.1;
+        self.set_end(values.2);
+    }
+
+    fn set_ik(&mut self, values: (f32, Vec2, Vec2)) {
         self.angle = values.0;
         self.start = values.1;
         self.set_end(values.2);

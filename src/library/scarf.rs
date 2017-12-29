@@ -8,7 +8,7 @@
 
 
 // Internal Dependencies ------------------------------------------------------
-use ::{Vec2, ParticleSystem, ParticleTemplate, Skeleton};
+use ::{Vec2, Space, ParticleSystem, ParticleTemplate, Skeleton};
 use ::library::{Accessory, Renderer, Collider};
 
 
@@ -67,8 +67,9 @@ impl<R: Renderer, C: Collider> Accessory<R, C> for Scarf {
     }
 
     fn fixate(&mut self, skeleton: &Skeleton) {
-        let origin = skeleton.get_bone_end_local(self.bone);
-        let offset = skeleton.get_bone_end_world(self.bone) - origin;
+        // TODO simpler way to get the offset?
+        let origin = skeleton.bone_end(Space::Local, self.bone);
+        let offset = skeleton.bone_end(Space::World, self.bone) - origin;
         self.facing = skeleton.local_transform();
         self.particles.get_mut(0).set_position(origin);
         self.offset = offset;
