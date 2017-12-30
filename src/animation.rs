@@ -17,6 +17,7 @@ type AnimationFrame = (f32, Vec<AnimationFrameBone>);
 
 
 // Animation Data Abstraction -------------------------------------------------
+#[derive(Debug)]
 pub struct AnimationData {
     pub duration: f32,
     pub key_frames: Vec<AnimationFrame>
@@ -24,6 +25,7 @@ pub struct AnimationData {
 
 
 // Animator State Machine Abstraction -----------------------------------------
+#[derive(Debug, Default)]
 pub struct AnimatorBuilder {
     default_blend: f32,
     blends: HashMap<(&'static str, &'static str), f32>,
@@ -33,17 +35,13 @@ pub struct AnimatorBuilder {
 impl AnimatorBuilder {
 
     pub fn new() -> Self {
-        Self {
-            default_blend: 0.0,
-            blends: HashMap::new(),
-            states: HashMap::new()
-        }
+        Self::default()
     }
 
     pub fn with_state<C: Fn(&mut AnimatorState)>(mut self, name: &'static str, callback: C) -> Self {
         let mut state = AnimatorState::new();
         callback(&mut state);
-        self.states.insert(name.into(), state);
+        self.states.insert(name, state);
         self
     }
 
@@ -53,7 +51,7 @@ impl AnimatorBuilder {
     }
 
     pub fn with_blend(mut self, from: &'static str, to: &'static str, duration: f32) -> Self {
-        self.blends.insert((from.into(), to.into()), duration);
+        self.blends.insert((from, to), duration);
         self
     }
 
@@ -72,6 +70,7 @@ impl AnimatorBuilder {
 
 }
 
+#[derive(Debug)]
 pub struct AnimatorState {
     animations: Vec<AnimationInstance>
 }
@@ -137,8 +136,8 @@ impl Animator {
     pub fn transition_to(&mut self, state: &'static str) {
 
         // Do nothing if already in the requested state
-        if let Some(ref current) = self.current {
-            if *current == state {
+        if let Some(current) = self.current {
+            if current == state {
                 return;
             }
         }
@@ -155,10 +154,10 @@ impl Animator {
         self.previous = self.current.take();
         self.current = Some(state);
 
-        self.blend_duration = if let Some(ref previous) = self.previous {
-            self.blends.get(&(previous, state)).map(|d| *d).unwrap_or_else(|| {
-                self.blends.get(&("*", state)).map(|d| *d).unwrap_or_else(|| {
-                    self.blends.get(&(previous, "*")).map(|d| *d).unwrap_or(self.default_blend)
+        self.blend_duration = if let Some(previous) = self.previous {
+            self.blends.get(&(previous, state)).cloned().unwrap_or_else(|| {
+                self.blends.get(&("*", state)).cloned().unwrap_or_else(|| {
+                    self.blends.get(&(previous, "*")).cloned().unwrap_or(self.default_blend)
                 })
             })
 
@@ -166,7 +165,6 @@ impl Animator {
             self.default_blend
         };
 
-        println!("{:?} -> {:?} in {}", self.previous, self.current, self.blend_duration);
         self.blend_timer = 0.0;
 
     }
@@ -176,8 +174,8 @@ impl Animator {
         self.blend_timer = (self.blend_timer + dt).min(self.blend_duration);
 
         let blend_factor = cubic_bezier(0.0, 0.0, 1.0, 1.0, (1.0 / self.blend_duration) * self.blend_timer);
-        if let Some(ref previous) = self.previous {
-            let speed = self.speeds.get(previous).map(|s| *s).unwrap_or(1.0);
+        if let Some(previous) = self.previous {
+            let speed = self.speeds.get(previous).cloned().unwrap_or(1.0);
             if let Some(ref mut state) = self.states.get_mut(previous) {
                 if 1.0 - blend_factor > 0.0 {
                     state.update(dt, speed);
@@ -186,8 +184,8 @@ impl Animator {
             }
         }
 
-        if let Some(ref current) = self.current {
-            let speed = self.speeds.get(current).map(|s| *s).unwrap_or(1.0);
+        if let Some(current) = self.current {
+            let speed = self.speeds.get(current).cloned().unwrap_or(1.0);
             if let Some(ref mut state) = self.states.get_mut(current) {
                 state.update(dt, speed);
                 state.apply_to_bones(blend_factor, bones);
@@ -200,6 +198,7 @@ impl Animator {
 
 
 // Animation Abstraction ------------------------------------------------------
+#[derive(Debug)]
 pub struct AnimationInstance {
     time: f32,
     blend: f32,

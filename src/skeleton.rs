@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 
 // Internal Dependencies ------------------------------------------------------
-use super::{Angle, Space, Vec2};
+use super::{Angle, Space, Vec2, f32_equals};
 use super::animation::{Animator, AnimatorBuilder, AnimationFrameBone};
 use super::{
     Constraint, AngularConstraint, StickConstraint, Ragdoll, Particle
@@ -255,7 +255,7 @@ impl Skeleton {
                             format!("s-{}-{}", parent, child),
                             parent,
                             child,
-                            (ap - bp).len()
+                            (ap - bp).length()
                         ))
                     );
                 },
@@ -264,7 +264,7 @@ impl Skeleton {
                     let joint = self.bone_by_name(joint).unwrap().index();
                     let child = self.bone_by_name(child).unwrap().index();
 
-                    let (left, right) = if self.local_transform.x.signum() == -1.0 {
+                    let (left, right) = if f32_equals(self.local_transform.x.signum(), -1.0) {
                         (right, left)
 
                     } else {
@@ -452,8 +452,7 @@ impl Skeleton {
             let start = Vec2::zero();
             match space {
                 Space::World => self.to_world(start),
-                Space::Local => start,
-                Space::Animation => start
+                Space::Local | Space::Animation => start
             }
         }
     }
@@ -479,8 +478,7 @@ impl Skeleton {
             let end = Vec2::zero();
             match space {
                 Space::World => self.to_world(end),
-                Space::Local => end,
-                Space::Animation => end
+                Space::Local | Space::Animation => end
             }
         }
     }

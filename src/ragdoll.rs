@@ -102,7 +102,7 @@ impl Ragdoll {
     pub fn apply_force(&mut self, local_origin: Vec2, force: Vec2, width: f32) {
 
         // Strength
-        let strength = force.len();
+        let strength = force.length();
         if strength > 0.0 {
 
             // Direction of the force
@@ -112,7 +112,7 @@ impl Ragdoll {
             for joint in &mut self.joints {
 
                 // Distance from joint to origin
-                let d = 1.0 / ((joint.position - local_origin).len() / width.max(1.0)).max(1.0);
+                let d = 1.0 / ((joint.position - local_origin).length() / width.max(1.0)).max(1.0);
 
                 // Force applied to this joint
                 joint.apply_force(dir * strength * d);
@@ -130,7 +130,7 @@ impl Ragdoll {
     // Internal ---------------------------------------------------------------
     fn split_off_joint(&mut self, name: &str, at_length: Option<f32>) {
 
-        let ci = *&self.constraint_name_map[name];
+        let ci = self.constraint_name_map[name];
         let (end, start) = {
             let constraint = &self.constraints[ci];
             (
@@ -168,12 +168,12 @@ impl Ragdoll {
         } else {
 
             // We duplicate the joint and insert it into our list of points
-            let new_joint = self.joints[start].clone();
+            let new_joint = self.joints[start];
             let new_index = self.joints.len();
             self.joints.push(new_joint);
 
             // Then create a new constraint to replace the existing one
-            let rest_length = (self.joints[new_index].position - self.joints[end].position).len();
+            let rest_length = (self.joints[new_index].position - self.joints[end].position).length();
             let mut c = StickConstraint::new(
                 self.constraints[ci].name().to_string(),
                 end,

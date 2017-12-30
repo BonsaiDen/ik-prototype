@@ -15,7 +15,7 @@ extern crate downcast_rs;
 
 
 // Enums ----------------------------------------------------------------------
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum Space {
     World,
     Local,

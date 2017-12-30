@@ -40,7 +40,7 @@ impl Vec2 {
     }
 
     pub fn unit(&self) -> Vec2 {
-        *self / self.len()
+        *self / self.length()
     }
 
     pub fn angle(&self) -> f32 {
@@ -66,7 +66,7 @@ impl Vec2 {
         }
     }
 
-    pub fn len(&self) -> f32 {
+    pub fn length(&self) -> f32 {
         (self.x * self.x + self.y * self.y).sqrt()
     }
 
@@ -78,7 +78,7 @@ impl Vec2 {
     }
 
     pub fn is_left(&self, a: Vec2, b: Vec2) -> bool {
-        ((b.x - a.x) * (self.y - a.y) - (b.y - a.y) * (self.x - a.x)).signum() == -1.0
+        f32_equals(((b.x - a.x) * (self.y - a.y) - (b.y - a.y) * (self.x - a.x)).signum(), -1.0)
     }
 
     pub fn len_square(&self) -> f32 {

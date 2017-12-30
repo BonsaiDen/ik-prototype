@@ -53,7 +53,7 @@ impl RigidBody {
 
             let a = points[c.0];
             let b = points[c.1];
-            let l = (a.0 - b.0).len();
+            let l = (a.0 - b.0).length();
 
             let mut constraint = StickConstraint::new(c.0.to_string(), a.1, b.1, l);
             if c.2 {
